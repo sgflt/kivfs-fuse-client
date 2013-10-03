@@ -5,31 +5,82 @@
  *      Author: Lukáš Kvídera, A11B0421P
  *	   Version: 0.0
  ---------------------------------------------------------------------------*/
+#define FUSE_USE_VERSION 28
 
+#include <fuse.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <kivfs.h>
+#include "kivfs_operations.h"
+#include "config.h"
+#include "cache.h"
+#include "main.h"
 
-int init(){
-	int res = 0;
+enum{
+	KEY_HELP,
 
+};
 
+int kivfs_opt_proc(void *data, const char *arg, int key, struct fuse_args *outargs){
 
+	printf("\033[31;mparser %d\033[0;m\n", key);
+	switch( key ){
+		case KEY_HELP:
+			kivfs_help();
+			return EXIT_SUCCESS;
+	}
+
+	return EXIT_FAILURE;
 }
 
-void help(){
-	printf("This is help for you");
+int kivfs_init(){
+	const char *cache_path = (const char *)get_cache_path();
+
+	/* Create cache directory if it doesn't exist */
+	if( access(cache_path, F_OK) ){
+		if( mkdir(cache_path, S_IRWXU) ){
+			perror( cache_path );
+			return EXIT_FAILURE;
+		}
+	}
+
+	if( cache_init() ){
+		return EXIT_FAILURE;
+	}
+
+	return EXIT_SUCCESS;
+}
+
+void kivfs_help(){
+	fprintf(stderr, "This is help for you\n");
+	fprintf(stderr, "kivfs [OPTION]... MOUNT_PATH...\n");
 }
 
 int main(int argc, char **argv){
 
 	if( argc <= 1){
-		help();
-	}
-
-	if( !init(argc, argv) ){
-		fprintf(stderr, "Initialisation failed!");
+		kivfs_help();
 		return EXIT_FAILURE;
 	}
 
-	return fuse_main(argc, argv, &hello_oper, NULL);
+	if( kivfs_init() ){
+		fprintf(stderr, "Initialisation failed!\n");
+		return EXIT_FAILURE;
+	}
+
+
+	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+
+	struct fuse_opt kivfs_opts[] = {
+	     FUSE_OPT_KEY("-h",		KEY_HELP),
+	     FUSE_OPT_KEY("--help",	KEY_HELP),
+	     FUSE_OPT_END
+	};
+
+	fuse_opt_parse(&args, NULL, kivfs_opts, kivfs_opt_proc);
+
+	fuse_main(args.argc, args.argv, &kivfs_operations, NULL);
+
+	cache_close();
 }

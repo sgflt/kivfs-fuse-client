@@ -29,7 +29,7 @@ $(OBJDIR):
 	mkdir $(OBJDIR)
 	
 $(BINDIR):	
-	mkdir $(OBJDIR)
+	mkdir $(BINDIR)
 	
 # Tool invocations
 ./bin/kivfs: $(OBJS) $(USER_OBJS)
@@ -44,7 +44,11 @@ clean:
 	-$(RM) $(OBJDIR) $(BINDIR)
 	-@echo ' '
 
-.PHONY: all clean dependents kivfs
+libinstall:
+	@sudo apt-get install e2fslibs-dev libssl-dev libkrb5 heimdal-dev libsqlite3-dev
+	
+
+.PHONY: all clean dependents kivfs libinstall
 .SECONDARY:
 
 -include ../makefile.targets

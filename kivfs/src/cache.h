@@ -13,7 +13,10 @@
 /*---------------------------- Structures ----------------------------------*/
 
 /*---------------------------- CONSTANTS -----------------------------------*/
-#define FILE_CHANGED 1
+typedef enum{
+	LOG_CONFLICT
+} cache_conflict_t;
+
 
 /*---------------------------- Variables -----------------------------------*/
 
@@ -25,6 +28,8 @@ int set_sync_flag(const char *path, int flag);
 int cache_add(const char *path, int read_hits, int write_hits, kivfs_file_type_t type);
 int cache_remove(const char *path);
 int cache_rename(const char *old_path, const char *new_path);
+void cache_log(const char *path, const char *new_path, KIVFS_VFS_COMMAND action);
+
 /*----------------------------- Macros -------------------------------------*/
 
 

@@ -106,9 +106,9 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi){
 	int res = 0;
 	char *full_path = get_full_path( path );
 
-	if( !is_cached( path ) ){
+	if( access(full_path, F_OK) != F_OK ){
 		//TODO: download from server
-
+		return -ENOENT;
 	}
 
 	//TODO: check version
@@ -164,7 +164,10 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 
 	free( full_path );
 
-	return cache_add(path, 0, 0, FILE_TYPE_REGULAR_FILE);
+	cache_add(path, 0, 0, FILE_TYPE_REGULAR_FILE);
+	cache_log(path, NULL, KIVFS_TOUCH);
+
+	return 0;
 }
 
 static int kivfs_access(const char *path, int mask){
@@ -228,7 +231,8 @@ static int kivfs_rename(const char *old_path, const char *new_path){
 	if( !cache_rename(old_path, new_path) ){
 		res = rename(full_old_path, full_new_path);
 
-		//TODO remote rename
+		cache_log(old_path, new_path, KIVFS_MOVE);
+		//TODO remote rename or set SYNC + action
 	}
 
 	if( res == -1 ){
@@ -264,7 +268,11 @@ static int kivfs_unlink(const char *path){
 		res = -errno;
 	}
 
+	//TODO remote remove and add second parameter for cache_remove
+	// FLAG_AS_REMOVED + SYNC || DELETE
 	cache_remove( path );
+	cache_log(path, NULL, KIVFS_UNLINK);
+
 	free( full_path );
 
 	return res;
@@ -281,8 +289,18 @@ static int kivfs_mkdir(const char *path, mode_t mode){
 		res = -errno;
 	}
 
+
+
 	free( full_path );
-	return cache_add(path, 0, 0, FILE_TYPE_DIRECTORY);
+	cache_add(path, 0, 0, FILE_TYPE_DIRECTORY);
+	cache_log(path, NULL, KIVFS_MKDIR);
+
+	return res;
+}
+
+static int kivfs_utimens(const char *path, const struct timespec tv[2]){
+	//TODO implement db
+	return 0;
 }
 
 struct fuse_operations kivfs_operations = {
@@ -301,4 +319,5 @@ struct fuse_operations kivfs_operations = {
 	.lock		= kivfs_lock,
 	.unlink		= kivfs_unlink,
 	.mkdir		= kivfs_mkdir,
+	.utimens	= kivfs_utimens,
 };

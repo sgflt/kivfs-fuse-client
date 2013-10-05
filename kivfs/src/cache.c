@@ -25,25 +25,6 @@
 
 static sqlite3 *db;
 
-// useless function because lstat
-void prepare_is_cached(sqlite3_stmt **stmt){
-
-	char *sql = 	"SELECT count(*) FROM files WHERE path LIKE :path AND cached == 1";
-
-	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_is_cached:\033[0;0m %s\n", sqlite3_errmsg( db ));
-	}
-}
-
-//as above
-void prepare_set_sync_flag(sqlite3_stmt **stmt){
-
-	char *sql = 	"UPDATE files SET sync = :flag WHERE path LIKE :path";
-
-	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_set_sync_flag:\033[0;0m %s\n", sqlite3_errmsg( db ));
-	}
-}
 
 void prepare_cache_add(sqlite3_stmt **stmt){
 
@@ -53,24 +34,30 @@ void prepare_cache_add(sqlite3_stmt **stmt){
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
 		fprintf(stderr,"\033[31;1mprepare_cache_add:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
+	else
+		fprintf(stderr,"\033[33;1mpreparee_cache_add:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 void prepare_cache_rename(sqlite3_stmt **stmt){
 
-	char *sql = 	"UPDATE files SET path = :new_path WHERE path LIKE :old_path";
+	char *sql = 	"UPDATE files SET path=replace(substr(path, 0, length(:old_path) + 1), :old_path, :new_path) || substr(path, length(:old_path) + 1) WHERE path LIKE (:old_path || '%')";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
 		fprintf(stderr,"\033[31;1mprepare_cache_rename:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
+	else
+		fprintf(stderr,"\033[33;1mprepare_cache_rename:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 void prepare_cache_remove(sqlite3_stmt **stmt){
 
-	char *sql = 	"DELETE FROM files WHERE path LIKE :path";
+	char *sql = 	"DELETE FROM files WHERE path LIKE :path%";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
 		fprintf(stderr,"\033[31;1mprepare_cache_remove:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
+	else
+		fprintf(stderr,"\033[33;1mprepare_cache_remove:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 void prepare_cache_log(sqlite3_stmt **stmt){
@@ -81,24 +68,41 @@ void prepare_cache_log(sqlite3_stmt **stmt){
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
 		fprintf(stderr,"\033[31;1mprepare_cache_log:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
+	else
+		fprintf(stderr,"\033[33;1mprepare_cache_log:\033[0;0m %s\n", sqlite3_errmsg( db ));
+}
+
+
+void prepare_log_move(sqlite3_stmt **stmt){
+
+	char *sql = 	"UPDATE log SET path=replace(substr(path, 0, length(:old_path) + 1), :old_path, :new_path) || substr(path, length(:old_path) + 1) WHERE path LIKE (:old_path || '%')";
+
+	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
+		fprintf(stderr,"\033[31;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
+	}
+	else
+		fprintf(stderr,"\033[33;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
+}
+
+
+void prepare_log_remove(sqlite3_stmt **stmt){
+
+	char *sql = 	"DELETE FROM log WHERE path LIKE :path";
+
+	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
+		fprintf(stderr,"\033[31;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
+	}
+	else
+		fprintf(stderr,"\033[33;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 static inline void cache_check_stmt(void (*initializer)(sqlite3_stmt **), sqlite3_stmt **stmt){
 	if( !*stmt ){
 		initializer( stmt );
 	}
-	else{
-		sqlite3_reset( *stmt );
-	}
 }
 
-/*void prepare_statements(){
-	prepare_is_cached();
-	prepare_set_sync_flag();
-	prepare_cache_add();
-	prepare_cache_rename();
-	prepare_cache_remove();
-}*/
+
 
 int cache_init(){
 	int res;
@@ -129,9 +133,6 @@ int cache_init(){
 				"atime INT NOT NULL,"
 			    "read_hits INT NOT NULL DEFAULT ('0'),"
 				"write_hits INT NOT NULL DEFAULT ('0'),"
-				//"cached INT NOT NULL DEFAULT ('0'),"
-				//"sync INT NOT NULL DEFAULT ('1'),"
-				//"removed INT NOT NULL DEFAULT('0'),"
 				"type INT NOT NULL,"
 				"version TEXT NOT NULL)",
 			    NULL,
@@ -140,7 +141,7 @@ int cache_init(){
 				);
 
 		if( res != SQLITE_OK ){
-			fprintf(stderr,"\033[31;1mcache_init\033[0;0m %s\n", sqlite3_errmsg(db));
+			fprintf(stderr,"\033[31;1mcache_init\033[0;0m %s\n", sqlite3_errmsg( db ));
 			return EXIT_FAILURE;
 		}
 
@@ -155,12 +156,11 @@ int cache_init(){
 						);
 
 		if( res != SQLITE_OK ){
-			fprintf(stderr,"\033[31;1mcache_init\033[0;0m %s\n", sqlite3_errmsg(db));
+			fprintf(stderr,"\033[31;1mcache_init\033[0;0m %s\n", sqlite3_errmsg( db ));
 			return EXIT_FAILURE;
 		}
 	}
 
-	///prepare_statements();
 	return res;
 }
 
@@ -173,56 +173,6 @@ int cache_init(){
  ---------------------------------------------------------------------------*/
 void cache_close(){
 	sqlite3_close( db );
-}
-
-/*----------------------------------------------------------------------------
-   Function : is_cachedr(const char *path)
-   In       :
-   Out      :
-   Job      :
-   Notice   : Deprecated
- ---------------------------------------------------------------------------*/
-int is_cached(const char *path){
-
-	int res;
-	static sqlite3_stmt *stmt = NULL;
-
-	cache_check_stmt(prepare_is_cached, &stmt);
-
-	sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, ":path"), path, ZERO_TERMINATED, NULL);
-	res = sqlite3_step( stmt );
-
-	if( res == SQLITE_ROW ){
-		return sqlite3_column_int(stmt, 0);
-	}
-
-	return 0;
-}
-
-/*----------------------------------------------------------------------------
-   Function : set_sync_flag(const char *path)
-   In       :
-   Out      :
-   Job      :
-   Notice   : DEPRECATED
- ---------------------------------------------------------------------------*/
-int set_sync_flag(const char *path, int flag){
-
-	int res;
-	static sqlite3_stmt *stmt = NULL;
-
-	cache_check_stmt(prepare_set_sync_flag, &stmt);
-
-	sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, ":path"), path, ZERO_TERMINATED, NULL);
-	sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, ":flag"), flag);
-	res = sqlite3_step( stmt );
-
-	if( res != SQLITE_OK ){
-		fprintf(stderr,"\033[31;1mset_flag: %s\033[0;0m %s\n", path, sqlite3_errmsg(db));
-		return SQLITE_ERROR;
-	}
-
-	return SQLITE_OK;
 }
 
 int cache_add(const char *path, int read_hits, int write_hits, kivfs_file_type_t type){
@@ -248,18 +198,17 @@ int cache_add(const char *path, int read_hits, int write_hits, kivfs_file_type_t
 
 	res = sqlite3_step( stmt );
 
-	if( res != SQLITE_DONE ){
+	if( (res = sqlite3_reset( stmt )) != SQLITE_OK ){
 		fprintf(stderr,"\033[31;1mcache_add: %s\033[0;0m %s %d\n", full_path, sqlite3_errmsg( db ), res);
-		res = -ENOENT;
+		res = -EEXIST;
 	}
 
 	free( full_path );
-	return SQLITE_OK;
+	return res;
 }
 
 int cache_rename(const char *old_path, const char *new_path){
 
-	int res;
 	static sqlite3_stmt *stmt = NULL;
 
 	cache_check_stmt(prepare_cache_rename, &stmt);
@@ -267,11 +216,11 @@ int cache_rename(const char *old_path, const char *new_path){
 	sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, ":old_path"), old_path, ZERO_TERMINATED, NULL);
 	sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, ":new_path"), new_path, ZERO_TERMINATED, NULL);
 
-	res = sqlite3_step( stmt );
+	sqlite3_step( stmt );
 
-	if( res != SQLITE_OK ){
-		fprintf(stderr,"\033[31;1mcache_rename: %s\033[0;0m %s\n", old_path, sqlite3_errmsg( db ));
-		res = -EEXIST;
+	if( sqlite3_reset( stmt ) != SQLITE_OK ){
+		fprintf(stderr,"\033[31;1mcache_rename: %s\033[0;0m %s %d\n", old_path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+		return -ENOENT;
 	}
 
 	return SQLITE_OK;
@@ -279,37 +228,58 @@ int cache_rename(const char *old_path, const char *new_path){
 
 int cache_remove(const char *path){
 
-	int res;
 	static sqlite3_stmt *stmt = NULL;
 
 	cache_check_stmt(prepare_cache_remove, &stmt);
 
 	sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, ":path"), path, ZERO_TERMINATED, NULL);
 
-	res = sqlite3_step( stmt );
+	sqlite3_step( stmt );
 
-	if( res != SQLITE_DONE ){
+	if( sqlite3_reset( stmt ) != SQLITE_OK ){
 		fprintf(stderr,"\033[31;1mcache_remove: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
+		return -ENOENT;
 	}
 
 	return SQLITE_OK;
 }
 
-void cache_solve_conflict(cache_conflict_t type, KIVFS_VFS_COMMAND action){
+void cache_solve_conflict(const char *path, const char *new_path, cache_conflict_t type, KIVFS_VFS_COMMAND action){
+
+	static sqlite3_stmt *move_stmt;
+	static sqlite3_stmt *unlink_stmt;
 
 	switch( action ){
+		case KIVFS_RMDIR:
+			/* fall through */
+				fprintf(stderr,"\033[31;1mLOG RMDIR: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
+
 		case KIVFS_UNLINK:
-			//TODO delete entry from log
+				fprintf(stderr,"\033[31;1mLOG UNLINK: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
+			cache_check_stmt(prepare_log_remove, &unlink_stmt);
+			sqlite3_bind_text(unlink_stmt, sqlite3_bind_parameter_index(unlink_stmt, ":path"), path, ZERO_TERMINATED, NULL);
+			sqlite3_step( unlink_stmt );
+			if( sqlite3_reset( unlink_stmt ) != SQLITE_OK ){
+				fprintf(stderr,"\033[31;1mLOG update error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
+			}
 			break;
 
 		case KIVFS_MOVE:
-			//TODO if create, then rename; else if unlink, then nothing
+			cache_check_stmt(prepare_log_move, &move_stmt);
+			sqlite3_bind_text(move_stmt, sqlite3_bind_parameter_index(move_stmt, ":old_path"), path, ZERO_TERMINATED, NULL);
+			sqlite3_bind_text(move_stmt, sqlite3_bind_parameter_index(move_stmt, ":new_path"), new_path, ZERO_TERMINATED, NULL);
+			sqlite3_step( move_stmt );
+			if( sqlite3_reset( move_stmt ) != SQLITE_OK ){
+				fprintf(stderr,"\033[31;1mLOG update error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
+
+			}
 			break;
 
 		case KIVFS_TOUCH:
-			//TODO if unlink, then touch
+			//TODO if unlink, then write
 			break;
 		default:
+			fprintf(stderr,"\033[31;1mLOG update error: Undefined command\033[0;0m\n");
 			break;
 	}
 
@@ -317,7 +287,6 @@ void cache_solve_conflict(cache_conflict_t type, KIVFS_VFS_COMMAND action){
 
 void cache_log(const char *path, const char *new_path, KIVFS_VFS_COMMAND action){
 
-	int res;
 	static sqlite3_stmt *stmt = NULL;
 
 	cache_check_stmt(prepare_cache_log, &stmt);
@@ -326,15 +295,15 @@ void cache_log(const char *path, const char *new_path, KIVFS_VFS_COMMAND action)
 	sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, ":new_path"), new_path, ZERO_TERMINATED, NULL);
 	sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, ":action"), action);
 
-	res = sqlite3_step( stmt );
+	sqlite3_step( stmt );
 
-	switch( res ){
+	switch( sqlite3_reset( stmt ) ){
 		case SQLITE_OK:
 			//fall through
 		case SQLITE_DONE:
 			return;
 		case SQLITE_CONSTRAINT:
-			cache_solve_conflict(LOG_CONFLICT, action);
+			cache_solve_conflict(path, new_path, LOG_CONFLICT, action);
 			break;
 		default:
 			fprintf(stderr,"\033[31;1mAction log failed: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));

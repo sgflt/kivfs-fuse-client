@@ -23,8 +23,6 @@ typedef enum{
 /*------------------- Functions: ANSI C prototypes -------------------------*/
 int cache_init();
 void cache_close();
-int is_cached(const char *path);
-int set_sync_flag(const char *path, int flag);
 int cache_add(const char *path, int read_hits, int write_hits, kivfs_file_type_t type);
 int cache_remove(const char *path);
 int cache_rename(const char *old_path, const char *new_path);

@@ -27,6 +27,8 @@ int cache_add(const char *path, int read_hits, int write_hits, kivfs_file_type_t
 int cache_remove(const char *path);
 int cache_rename(const char *old_path, const char *new_path);
 void cache_log(const char *path, const char *new_path, KIVFS_VFS_COMMAND action);
+int cache_readdir(const char *path, void *buf, fuse_fill_dir_t filler);
+int cache_getattr(const char *path, struct stat *stbuf);
 
 /*----------------------------- Macros -------------------------------------*/
 

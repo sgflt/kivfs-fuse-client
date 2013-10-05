@@ -36,7 +36,7 @@ static int kivfs_getattr(const char *path, struct stat *stbuf){
 			perror("\033[31;1mlstat\033[0;0m ");
 
 			//TODO: remote get attr or cache dunno now
-
+			return cache_getattr(path, stbuf);
 			//kivfs_file_t file;
 
 			return -ENOENT; //TODO zatim vrací nenalezeno
@@ -72,33 +72,10 @@ static int kivfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file
 static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		 off_t offset, struct fuse_file_info *fi){
 
-	char *full_path = get_full_path( path );
+		filler(buf, ".", NULL, 0);
+		filler(buf, "..", NULL, 0);
 
-	if( access(full_path, F_OK) ){
-		return -errno;
-	}
-	else{
-		DIR *dir = opendir( full_path );
-
-		// TODO should be filled from db instead of direct access
-		/* Fill bufer with cached files */
-		if( dir != NULL ){
-			struct dirent *dirent;
-
-			seekdir(dir, offset);
-			while( (dirent = readdir( dir )) ) {
-				if( filler(buf, dirent->d_name, NULL, 0) ) {
-					break;
-				}
-			}
-		}
-
-		closedir(dir);
-		//TODO remote dir fill
-	}
-
-	free( full_path );
-	return 0;
+		return cache_readdir(path, buf, filler);
 }
 
 static int kivfs_open(const char *path, struct fuse_file_info *fi){
@@ -237,7 +214,7 @@ static int kivfs_rename(const char *old_path, const char *new_path){
 		return 0;
 	}
 
-	return -EEXIST;
+	return -EISDIR;
 }
 
 int kivfs_lock(const char *path, struct fuse_file_info *fi, int cmd, struct flock *lock){

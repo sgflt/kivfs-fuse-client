@@ -145,7 +145,7 @@ static int kivfs_write(const char *path, const char *buf, size_t size,
 		size = -errno;
 	}
 	else{
-		set_sync_flag(path, FILE_CHANGED);
+		//set_sync_flag(path, FILE_CHANGED);
 	}
 
 	return size;
@@ -222,26 +222,22 @@ static int kivfs_ftruncate(const char *path, off_t size, struct fuse_file_info *
 
 static int kivfs_rename(const char *old_path, const char *new_path){
 
-	int res;
-
-	char *full_old_path = get_full_path( old_path );
-	char *full_new_path = get_full_path( new_path );
-
 	/* If renamed in databese, then rename in cache. */
 	if( !cache_rename(old_path, new_path) ){
-		res = rename(full_old_path, full_new_path);
+		char *full_old_path = get_full_path( old_path );
+		char *full_new_path = get_full_path( new_path );
 
+		rename(full_old_path, full_new_path);
 		cache_log(old_path, new_path, KIVFS_MOVE);
 		//TODO remote rename or set SYNC + action
+
+		free( full_new_path );
+		free( full_old_path );
+
+		return 0;
 	}
 
-	if( res == -1 ){
-		res = -errno;
-	}
-
-	free( full_new_path );
-	free( full_old_path );
-	return res;
+	return -EEXIST;
 }
 
 int kivfs_lock(const char *path, struct fuse_file_info *fi, int cmd, struct flock *lock){
@@ -259,44 +255,61 @@ int kivfs_lock(const char *path, struct fuse_file_info *fi, int cmd, struct floc
 
 static int kivfs_unlink(const char *path){
 
-	int res;
-	char *full_path = get_full_path( path );
-
-	res = unlink(full_path);
-
-	if( res == -1 ){
-		res = -errno;
-	}
-
 	//TODO remote remove and add second parameter for cache_remove
 	// FLAG_AS_REMOVED + SYNC || DELETE
-	cache_remove( path );
-	cache_log(path, NULL, KIVFS_UNLINK);
+	if( !cache_remove( path ) ){
+		char *full_path = get_full_path( path );
 
-	free( full_path );
+		cache_log(path, NULL, KIVFS_UNLINK);
+		unlink( full_path );
+		free( full_path );
+		return 0;
+	}
 
-	return res;
+
+	return -ENOENT;
 }
 
 static int kivfs_mkdir(const char *path, mode_t mode){
 
-	int res;
-	char *full_path = get_full_path( path );
+	if( !cache_add(path, 0, 0, FILE_TYPE_DIRECTORY) ){
+		char *full_path = get_full_path( path );
 
-	res = mkdir(full_path, mode);
-
-	if( res == -1 ){
-		res = -errno;
+		cache_log(path, NULL, KIVFS_MKDIR);
+		mkdir(full_path, mode);
+		free( full_path );
+		return 0;
 	}
 
-
-
-	free( full_path );
-	cache_add(path, 0, 0, FILE_TYPE_DIRECTORY);
-	cache_log(path, NULL, KIVFS_MKDIR);
-
-	return res;
+	return -EEXIST;
 }
+
+static int kivfs_rmdir(const char *path){
+
+	//TODO remote remove and add second parameter for cache_remove
+	// FLAG_AS_REMOVED + SYNC || DELETE
+	if( !cache_remove( path ) ){
+		char *full_path = get_full_path( path );
+		int res;
+
+		/* If a directory contains files, then rmdir will fail */
+		res =  rmdir( full_path );
+		free( full_path );
+
+		/* Log rmdir only if it was succesful */
+		if( !res ){
+			cache_log(path, NULL, KIVFS_RMDIR);
+			return 0;
+		}
+
+		return -errno;
+	}
+
+	return -ENOENT;
+
+}
+
+
 
 static int kivfs_utimens(const char *path, const struct timespec tv[2]){
 	//TODO implement db
@@ -319,5 +332,6 @@ struct fuse_operations kivfs_operations = {
 	.lock		= kivfs_lock,
 	.unlink		= kivfs_unlink,
 	.mkdir		= kivfs_mkdir,
+	.rmdir		= kivfs_rmdir,
 	.utimens	= kivfs_utimens,
 };

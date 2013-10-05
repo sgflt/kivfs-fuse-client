@@ -40,7 +40,20 @@ void prepare_cache_add(sqlite3_stmt **stmt){
 
 void prepare_cache_rename(sqlite3_stmt **stmt){
 
-	char *sql = 	"UPDATE files SET path=replace(substr(path, 0, length(:old_path) + 1), :old_path, :new_path) || substr(path, length(:old_path) + 1) WHERE path LIKE (:old_path || '%')";
+	char *sql = 	"UPDATE files "
+					"SET "
+					"	path="
+					"		replace("
+					"			substr(path, 1, length(:old_path)),"
+					"			:old_path,"
+					"			:new_path"
+					"		) "
+					"		|| "
+					"		substr(path, length(:old_path) + 1) "
+					"WHERE "
+					"	path LIKE (:old_path || '/%') " //subfolders
+					"	or "
+					"	path LIKE :old_path";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
 		fprintf(stderr,"\033[31;1mprepare_cache_rename:\033[0;0m %s\n", sqlite3_errmsg( db ));
@@ -98,7 +111,20 @@ void prepare_cache_log(sqlite3_stmt **stmt){
 
 void prepare_log_move(sqlite3_stmt **stmt){
 
-	char *sql = 	"UPDATE log SET path=replace(substr(path, 0, length(:old_path) + 1), :old_path, :new_path) || substr(path, length(:old_path) + 1) WHERE path LIKE (:old_path || '%')";
+	char *sql = 	"UPDATE log "
+					"SET "
+					"	path="
+					"		replace("
+					"			substr(path, 1, length(:old_path)),"
+					"			:old_path,"
+					"			:new_path"
+					"		) "
+					"		|| "
+					"		substr(path, length(:old_path) + 1) "
+					"WHERE "
+					"	path LIKE (:old_path || '/%') " //subfolders
+					"	or "
+					"	path LIKE :old_path"; //file or folder
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
 		fprintf(stderr,"\033[31;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
@@ -293,6 +319,7 @@ void cache_solve_conflict(const char *path, const char *new_path, cache_conflict
 			break;
 
 		case KIVFS_MOVE:
+				fprintf(stderr,"\033[31;1mLOG MOVE: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
 			cache_check_stmt(prepare_log_move, &move_stmt);
 			sqlite3_bind_text(move_stmt, sqlite3_bind_parameter_index(move_stmt, ":old_path"), path, ZERO_TERMINATED, NULL);
 			sqlite3_bind_text(move_stmt, sqlite3_bind_parameter_index(move_stmt, ":new_path"), new_path, ZERO_TERMINATED, NULL);

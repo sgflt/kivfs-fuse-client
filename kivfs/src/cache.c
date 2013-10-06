@@ -335,6 +335,7 @@ int cache_readdir(const char *path, void *buf, fuse_fill_dir_t filler){
 
 int cache_getattr(const char *path, struct stat *stbuf){
 
+	int res;
 	static sqlite3_stmt *stmt = NULL;
 
 	cache_check_stmt(prepare_cache_getattr, &stmt);
@@ -369,22 +370,23 @@ int cache_getattr(const char *path, struct stat *stbuf){
 								stbuf->st_mode,
 								S_IFDIR | S_IRWXU
 						);
+		res = F_OK;
+	}
+	else{
+		res = -ENOENT;
 	}
 
 	if( sqlite3_reset( stmt ) == SQLITE_OK ){
-
-		sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
-		return SQLITE_OK;
+		fprintf(stderr,"\033[31;1mCache getattr reset OK: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 	else{
-
 		fprintf(stderr,"\033[31;1mCache getattr failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 
 	fprintf(stderr,"\033[31;1mCache getattr EXTREME failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 
 	sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
-	return -ENOENT;
+	return res;
 
 }
 

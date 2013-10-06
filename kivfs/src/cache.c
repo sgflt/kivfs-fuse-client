@@ -369,15 +369,16 @@ int cache_getattr(const char *path, struct stat *stbuf){
 								stbuf->st_mode,
 								S_IFDIR | S_IRWXU
 						);
-		if( sqlite3_reset( stmt ) == SQLITE_OK ){
+	}
 
-			sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
-			return SQLITE_OK;
-		}
-		else{
+	if( sqlite3_reset( stmt ) == SQLITE_OK ){
 
-			fprintf(stderr,"\033[31;1mCache getattr failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
-		}
+		sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
+		return SQLITE_OK;
+	}
+	else{
+
+		fprintf(stderr,"\033[31;1mCache getattr failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 
 	fprintf(stderr,"\033[31;1mCache getattr EXTREME failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));

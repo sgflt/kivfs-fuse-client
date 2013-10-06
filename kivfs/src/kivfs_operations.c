@@ -23,7 +23,11 @@
 
 static int kivfs_getattr(const char *path, struct stat *stbuf){
 
+	int res = 0;
 	memset(stbuf, 0, sizeof(struct stat));
+
+
+	fprintf(stderr,"\033[31;1mgetattr %s\033[0;0m ", path);
 
 	if( strcmp(path, "/") == 0 ){
 		stbuf->st_mode = S_IFDIR | S_IRWXU;
@@ -32,37 +36,20 @@ static int kivfs_getattr(const char *path, struct stat *stbuf){
 	else {
 		char *full_path = get_full_path( path );
 
+		/* If stat fails, retrieve info from db or remote server */
 		if( stat(full_path, stbuf) ){
 			perror("\033[31;1mlstat\033[0;0m ");
 
 			//TODO: remote get attr or cache dunno now
-			return cache_getattr(path, stbuf);
+			res = cache_getattr(path, stbuf);
 			//kivfs_file_t file;
 
-			return -ENOENT; //TODO zatim vrací nenalezeno
 		}
 
 		free( full_path );
 	}
 
-
-	printf("\n\033[33;1m\tinode: %lu\033[0;0m\n", stbuf->st_ino);
-	printf("\033[33;1m\t: %u\033[0;0m\n", stbuf->st_mode);
-	printf("\n\033[33;1m\tmode: %c%c%c %c%c%c %c%c%c\033[0;0m\n",
-				stbuf->st_mode & S_IRUSR ? 'r' : '-',
-				stbuf->st_mode & S_IWUSR ? 'w' : '-',
-				stbuf->st_mode & S_IXUSR ? 'x' : '-',
-				stbuf->st_mode & S_IRGRP ? 'r' : '-',
-				stbuf->st_mode & S_IWGRP ? 'w' : '-',
-				stbuf->st_mode & S_IXGRP ? 'x' : '-',
-				stbuf->st_mode & S_IROTH ? 'r' : '-',
-				stbuf->st_mode & S_IWOTH ? 'w' : '-',
-				stbuf->st_mode & S_IXOTH ? 'x' : '-'
-				);
-	printf("\033[33;1m\tblksize: %ld\033[0;0m\n", stbuf->st_blksize);
-	printf("\033[33;1m\tblkcnt: %lu\033[0;0m\n", stbuf->st_blocks);
-
-	return 0;
+	return res;
 }
 
 static int kivfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi){
@@ -75,6 +62,7 @@ static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		filler(buf, ".", NULL, 0);
 		filler(buf, "..", NULL, 0);
 
+		/* Read dir from cache, because user want to see all available files */
 		return cache_readdir(path, buf, filler);
 }
 
@@ -122,7 +110,7 @@ static int kivfs_write(const char *path, const char *buf, size_t size,
 		size = -errno;
 	}
 	else{
-		//set_sync_flag(path, FILE_CHANGED);
+		cache_log(path, NULL, KIVFS_WRITE);
 	}
 
 	return size;
@@ -134,17 +122,20 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 	char *full_path = get_full_path( path );
 
 	fi->fh = creat(full_path, mode);	// fi->fh pro rychlejší přístup, zatim k ničemu
+	free( full_path );
 
 	if( fi->fh == -1 ){
 		return -errno;
 	}
 
-	free( full_path );
 
-	cache_add(path, 0, 0, FILE_TYPE_REGULAR_FILE);
-	cache_log(path, NULL, KIVFS_TOUCH);
+	if( !cache_add(path, 0, 0, FILE_TYPE_REGULAR_FILE) ){
+		cache_log(path, NULL, KIVFS_TOUCH);
+		return 0;
+	}
 
-	return 0;
+	return -EEXIST;
+
 }
 
 static int kivfs_access(const char *path, int mask){
@@ -153,12 +144,13 @@ static int kivfs_access(const char *path, int mask){
 	char *full_path = get_full_path( path );
 
 	res = access(full_path, mask);
+	free( full_path );
 
-	if( res == -1 ){
-		res = -errno;
+	if( res ){
+		fprintf(stderr, "\033[33;1m Access mode %o %d \033[0;0m",cache_file_mode( path ) & mask, cache_file_mode( path ) & mask ? F_OK : -EACCES);
+		return cache_file_mode( path ) & mask ? F_OK : -EACCES;
 	}
 
-	free( full_path );
 	return res;
 }
 
@@ -175,26 +167,28 @@ static int kivfs_truncate(const char *path, off_t size){
 	char *full_path = get_full_path( path );
 
 	res = truncate(full_path, size);
+	free( full_path );
 
-	if (res == -1){
-		res = -errno;
+	if( res == -1 ){
+		return -errno;
 	}
 
-	free( full_path );
+	/* Write will also truncate */
+	cache_log(path, NULL, KIVFS_WRITE);
+
 	return res;
 }
 
 static int kivfs_ftruncate(const char *path, off_t size, struct fuse_file_info *fi){
 
-	int res = 0;
-
-	res = ftruncate(fi->fh, size);
-
-	if( res == -1 ){
-		res = -errno;
+	if( ftruncate(fi->fh, size) ){
+		return -errno;
 	}
 
-	return res;
+	/* Write will also truncate */
+	cache_log(path, NULL, KIVFS_WRITE);
+
+	return 0;
 }
 
 static int kivfs_rename(const char *old_path, const char *new_path){
@@ -249,15 +243,23 @@ static int kivfs_unlink(const char *path){
 
 static int kivfs_mkdir(const char *path, mode_t mode){
 
-	if( !cache_add(path, 0, 0, FILE_TYPE_DIRECTORY) ){
-		char *full_path = get_full_path( path );
+	int res;
+	char *full_path = get_full_path( path );
 
+	res = mkdir(full_path, mode);
+	free( full_path );
+
+
+	if( res == -1 ){
+		return -errno;
+	}
+
+	if( !cache_add(path, 0, 0, FILE_TYPE_DIRECTORY) ){
 		cache_log(path, NULL, KIVFS_MKDIR);
-		mkdir(full_path, mode);
-		free( full_path );
 		return 0;
 	}
 
+	fprintf(stderr, "\033[33;1mdir exists\033[0;0m");
 	return -EEXIST;
 }
 

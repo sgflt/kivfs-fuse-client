@@ -14,6 +14,7 @@
 #include <libgen.h>
 #include <sqlite3.h>
 #include <kivfs.h>
+
 #include "config.h"
 #include "cache.h"
 #include "prepared_stmts.h"
@@ -24,11 +25,16 @@
 
 
 static sqlite3 *db;
+static sqlite3_stmt *readdir_stmt = NULL;
 
 static inline void cache_check_stmt(void (*initializer)(sqlite3_stmt **, sqlite3 *), sqlite3_stmt **stmt){
 	if( !*stmt ){
 		initializer(stmt, db);
 	}
+}
+
+void prepare_stmts(){
+
 }
 
 int cache_init(){
@@ -40,7 +46,7 @@ int cache_init(){
 	strcat(db_path, "/tmp");
 	strcat(db_path, db_filename);
 
-	printf("db path: %s mutex: %d\n", db_path, sqlite3_threadsafe() );
+	printf("db path: %s mutex: %d \n", db_path, sqlite3_threadsafe());
 
 	res = sqlite3_open_v2(db_path, &db, SQLITE_OPEN_READWRITE, NULL);
 	if( res != SQLITE_OK ){
@@ -52,6 +58,18 @@ int cache_init(){
 		}
 
 		fprintf(stderr, "\033[31;1mcreating table\033[0;0m\n\n");
+		/*res = sqlite3_exec(db,
+						"PRAGMA journal_mode=WAL",
+					    NULL,
+					    NULL,
+					    NULL
+						);*/ /*TODO: possible speed up */
+
+		if( res != SQLITE_OK ){
+			fprintf(stderr,"\033[31;1mcache_init\033[0;0m %s\n", sqlite3_errmsg( db ));
+			return EXIT_FAILURE;
+		}
+
 		res = sqlite3_exec(db,
 				"CREATE TABLE \"main\".\"files\" ("
 			    "path TEXT PRIMARY KEY NOT NULL,"
@@ -89,8 +107,11 @@ int cache_init(){
 		}
 	}
 
+	prepare_cache_readdir(&readdir_stmt, db);
+
 	return res;
 }
+
 
 /*----------------------------------------------------------------------------
    Function : cache_close()
@@ -100,6 +121,7 @@ int cache_init(){
    Notice   :
  ---------------------------------------------------------------------------*/
 void cache_close(){
+	sqlite3_finalize( readdir_stmt );
 	sqlite3_close( db );
 }
 
@@ -112,7 +134,7 @@ int cache_add(const char *path, int read_hits, int write_hits, kivfs_file_type_t
 
 	stat(full_path, &stbuf);
 
-	fprintf(stderr,"\033[31;1mcache_add: %s mode: %o\033[0;0m\n", path, stbuf.st_mode);
+	fprintf(stderr,"\033[31;1mcache_add: %s mode: %o \033[0;0m\n", path, stbuf.st_mode);
 
 	sqlite3_mutex_enter( sqlite3_db_mutex( db ) );
 
@@ -302,26 +324,22 @@ void cache_log(const char *path, const char *new_path, KIVFS_VFS_COMMAND action)
 
 int cache_readdir(const char *path, void *buf, fuse_fill_dir_t filler){
 
-	static sqlite3_stmt *stmt = NULL;
-
-	cache_check_stmt(prepare_cache_readdir, &stmt);
-
 	sqlite3_mutex_enter( sqlite3_db_mutex( db ) );
 
-	sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, ":path"), path, ZERO_TERMINATED, NULL);
+	sqlite3_bind_text(readdir_stmt, sqlite3_bind_parameter_index(readdir_stmt, ":path"), path, ZERO_TERMINATED, NULL);
 
 
 	fprintf(stderr,"\033[34;1mCache readdir before: %s\033[0;0m %s err: %d %s\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ), path);
 
-	while( sqlite3_step( stmt ) == SQLITE_ROW ){//basename( (char *)sqlite3_column_text(stmt, 0) )
-		fprintf(stderr,"\033[34;1mCache readdir step: %s\033[0;0m %s err: %d %s\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ), basename( (char *)sqlite3_column_text(stmt, 0) ));
-		if( filler(buf, basename( (char *)sqlite3_column_text(stmt, 0) ) , NULL, 0) ){
+	while( sqlite3_step( readdir_stmt ) == SQLITE_ROW ){//basename( (char *)sqlite3_column_text(stmt, 0) )
+		fprintf(stderr,"\033[34;1mCache readdir step: %s\033[0;0m %s err: %d %s\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ), basename( (char *)sqlite3_column_text(readdir_stmt, 0) ));
+		if( filler(buf, basename( (char *)sqlite3_column_text(readdir_stmt, 0) ) , NULL, 0) ){
 			break;
 		}
 	}
 	fprintf(stderr,"\033[31;1mCache readdir: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 
-	if( sqlite3_reset( stmt ) == SQLITE_OK ){
+	if( sqlite3_reset( readdir_stmt ) == SQLITE_OK ){
 		sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
 		return SQLITE_OK;
 	}
@@ -383,6 +401,7 @@ int cache_getattr(const char *path, struct stat *stbuf){
 		fprintf(stderr,"\033[31;1mCache getattr failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 
+	if(!res)
 	fprintf(stderr,"\033[31;1mCache getattr EXTREME failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 
 	sqlite3_mutex_leave( sqlite3_db_mutex( db ) );

@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <kivfs.h>
+
 #include "kivfs_operations.h"
 #include "config.h"
 #include "cache.h"
@@ -34,7 +35,7 @@ int kivfs_opt_proc(void *data, const char *arg, int key, struct fuse_args *outar
 	return EXIT_FAILURE;
 }
 
-int kivfs_init(){
+int init(){
 	const char *cache_path = (const char *)get_cache_path();
 
 	/* Create cache directory if it doesn't exist */
@@ -80,7 +81,5 @@ int main(int argc, char **argv){
 
 	fuse_opt_parse(&args, NULL, kivfs_opts, kivfs_opt_proc);
 
-	fuse_main(args.argc, args.argv, &kivfs_operations, NULL);
-
-	cache_close();
+	return fuse_main(args.argc, args.argv, &kivfs_operations, NULL);
 }

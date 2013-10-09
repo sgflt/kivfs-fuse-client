@@ -15,8 +15,10 @@
 #include <unistd.h>
 #include <kivfs.h>
 #include <ulockmgr.h>
+
 #include "config.h"
 #include "cache.h"
+#include "connection.h"
 
 #define concat(cache_path, path) { strcat(full_path, cache_path); strcat(full_path, path); }
 
@@ -73,7 +75,8 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi){
 
 	if( access(full_path, F_OK) != F_OK ){
 		//TODO: download from server
-		return -ENOENT;
+
+		return kivfs_get_to_cache( path );
 	}
 
 	//TODO: check version
@@ -146,6 +149,7 @@ static int kivfs_access(const char *path, int mask){
 	res = access(full_path, mask);
 	free( full_path );
 
+	/* If a file is not present in cache, compute acces rights from database. */
 	if( res ){
 		fprintf(stderr, "\033[33;1m Access mode %o %d \033[0;0m",cache_file_mode( path ) & mask, cache_file_mode( path ) & mask ? F_OK : -EACCES);
 		return cache_file_mode( path ) & mask ? F_OK : -EACCES;
@@ -157,7 +161,7 @@ static int kivfs_access(const char *path, int mask){
 static int kivfs_release(const char *path, struct fuse_file_info *fi){
 
 	//TODO: odeslat změny na server
-
+	//fcntl(fd, F_GETFD) pro zjištění lokality deskriptoru
 	return close( fi->fh );
 }
 
@@ -291,8 +295,32 @@ static int kivfs_rmdir(const char *path){
 
 
 static int kivfs_utimens(const char *path, const struct timespec tv[2]){
-	//TODO implement db
-	return 0;
+
+	int res;
+	char *full_path = get_full_path( path );
+
+	res = utimensat(0, full_path, tv, AT_SYMLINK_NOFOLLOW);
+
+	free( full_path );
+	return 0; // Don't worry about ENOENT
+}
+
+static int kivfs_chmod(const char *path, mode_t mode){
+	//TODO online chmod
+
+	return -ENOSYS;
+}
+
+static void *kivfs_init(struct fuse_conn_info *conn){
+	kivfs_session_init();
+	//TODO
+	return NULL;
+}
+
+static void kivfs_destroy(void * ptr){
+	//TODO
+
+	cache_close();
 }
 
 struct fuse_operations kivfs_operations = {
@@ -313,4 +341,6 @@ struct fuse_operations kivfs_operations = {
 	.mkdir		= kivfs_mkdir,
 	.rmdir		= kivfs_rmdir,
 	.utimens	= kivfs_utimens,
+	.chmod		= kivfs_chmod,
+	.init		= kivfs_init,
 };

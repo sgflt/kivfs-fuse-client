@@ -9,6 +9,7 @@
 #ifndef CONFIG_H_
 #define CONFIG_H_
 
+#include <kivfs.h>
 
 /*---------------------------- Structures ----------------------------------*/
 
@@ -17,6 +18,7 @@
 /*---------------------------- Variables -----------------------------------*/
 
 /*------------------- Functions: ANSI C prototypes -------------------------*/
+kivfs_server_t *get_server();
 char * get_cache_path();
 char * get_full_path(const char *path);
 /*----------------------------- Macros -------------------------------------*/

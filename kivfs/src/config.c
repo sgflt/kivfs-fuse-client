@@ -6,6 +6,7 @@
  *	   Version: 0.0
  ---------------------------------------------------------------------------*/
 #include <fuse.h>
+#include <kivfs.h>
 #include <stdlib.h>
 #include <string.h>
 #include "config.h"
@@ -14,7 +15,17 @@
 /* Path should be shorter than PATH_MAX */
 static char *cache_path = "/tmp/fusetmp"; //TODO: nastavit v init
 
+kivfs_server_t server = {
+		.id = 0,
+		.name = "localhost",
+		.priority = 0,
+		.public_ip = "127.0.0.1",
+};
 
+
+kivfs_server_t *get_server(){
+	return &server;
+}
 
 char * get_cache_path(){
 	return cache_path;

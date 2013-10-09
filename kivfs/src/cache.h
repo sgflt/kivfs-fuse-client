@@ -34,5 +34,7 @@ mode_t cache_file_mode(const char *path);
 
 /*----------------------------- Macros -------------------------------------*/
 
+#define bind_text(stmt, sql_var, var) sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, sql_var), var, ZERO_TERMINATED, NULL)
+#define bind_int(stmt, sql_var, var) sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, sql_var), var)
 
 #endif /* CACHE_H_ */

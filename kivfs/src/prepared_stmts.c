@@ -112,7 +112,23 @@ void prepare_cache_log(sqlite3_stmt **stmt, sqlite3 *db){
 		fprintf(stderr,"\033[33;1mprepare_cache_log:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
-/* if locally created file is moved before upload*/
+/*----------------------------------------------------------------------------
+   Function : prepare_log_move(sqlite3_stmt **stmt, sqlite3 *db)
+   In       : stmt .sqlite statement
+   	   	   	  db opened database
+   Out      : void
+   Job      : Prepares statement.
+   Notice   : What the SQL query really do?
+   	   	   	  If in Db exists conflicting entry with action KIVFS_WRITE, then
+   	   	   	  move appends new destination to the same row.
+
+   	   	   	  If enrty has action KIVFS_TOUCH or KIVFS_MKDIR, then replaces
+   	   	   	  path with new_path, so no move have to be done.
+
+   	   	   	  The problem is when user do `mv a b` and then `mv b a`
+   	   	   	  and `mv a b` again. Implementation should check to existence
+   	   	   	  of this circle and delete all midsteps.
+ ---------------------------------------------------------------------------*/
 void prepare_log_move(sqlite3_stmt **stmt, sqlite3 *db){
 
 	char *sql = 	"UPDATE log 										"
@@ -177,6 +193,7 @@ void prepare_log_remote_remove(sqlite3_stmt **stmt, sqlite3 *db){
 
 
 void prepare_cache_file_mode(sqlite3_stmt **stmt, sqlite3 *db){
+
 	char *sql = 	"SELECT mode FROM files WHERE path LIKE :path	";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
@@ -186,3 +203,12 @@ void prepare_cache_file_mode(sqlite3_stmt **stmt, sqlite3 *db){
 		fprintf(stderr,"\033[33;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
+void prepare_cache_chmod(sqlite3_stmt **stmt, sqlite3 *db){
+	char *sql = 	"UPDATE log SET mode = :mode WHERE path LIKE :path";
+
+	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
+		fprintf(stderr,"\033[31;1mprepare_cache_chmod:\033[0;0m %s\n", sqlite3_errmsg( db ));
+	}
+	else
+		fprintf(stderr,"\033[33;1mprepare_cache_chmod:\033[0;0m %s\n", sqlite3_errmsg( db ));
+}

@@ -14,18 +14,39 @@
 #include <libgen.h>
 #include <sqlite3.h>
 #include <kivfs.h>
+#include <pthread.h>
 
 #include "config.h"
 #include "cache.h"
 #include "prepared_stmts.h"
+#include "connection.h"
 
 //XXX: odstranit nepotřebné includy
 #include <stdio.h>
 
 
+sqlite3 *db;
 
-static sqlite3 *db;
-static sqlite3_stmt *readdir_stmt = NULL;
+sqlite3_stmt *add_stmt;
+sqlite3_stmt *rename_stmt;
+sqlite3_stmt *remove_stmt;
+sqlite3_stmt *log_stmt;
+sqlite3_stmt *readdir_stmt;
+sqlite3_stmt *getattr_stmt;
+sqlite3_stmt *get_fmod_stmt;
+sqlite3_stmt *chmod_stmt;
+
+/* Each function can be processed without race condition */
+pthread_mutex_t add_mutex;
+pthread_mutex_t rename_mutex;
+pthread_mutex_t remove_mutex;
+pthread_mutex_t log_mutex;
+pthread_mutex_t readdir_mutex;
+pthread_mutex_t getattr_mutex;
+pthread_mutex_t get_fmod_mutex;
+pthread_mutex_t chmod_mutex;
+pthread_mutex_t sync_mutex;
+
 
 static inline void cache_check_stmt(void (*initializer)(sqlite3_stmt **, sqlite3 *), sqlite3_stmt **stmt){
 	if( !*stmt ){
@@ -33,8 +54,27 @@ static inline void cache_check_stmt(void (*initializer)(sqlite3_stmt **, sqlite3
 	}
 }
 
-void prepare_stmts(){
+void prepare_statements(){
+	prepare_cache_add			(&add_stmt,		db);
+	prepare_cache_rename		(&rename_stmt,	db);
+	prepare_cache_remove		(&remove_stmt,	db);
+	prepare_cache_log			(&log_stmt,		db);
+	prepare_cache_readdir		(&readdir_stmt, db);
+	prepare_cache_getattr		(&getattr_stmt,	db);
+	prepare_cache_file_mode	(&get_fmod_stmt,db);
+	prepare_cache_chmod		(&chmod_stmt, 	db);
+}
 
+void init_mutexes(){
+	pthread_mutex_init(&add_mutex,		NULL);
+	pthread_mutex_init(&rename_mutex, 	NULL);
+	pthread_mutex_init(&remove_mutex, 	NULL);
+	pthread_mutex_init(&log_mutex, 		NULL);
+	pthread_mutex_init(&readdir_mutex, 	NULL);
+	pthread_mutex_init(&getattr_mutex, 	NULL);
+	pthread_mutex_init(&get_fmod_mutex, 	NULL);
+	pthread_mutex_init(&chmod_mutex,		NULL);
+	pthread_mutex_init(&sync_mutex,		NULL);
 }
 
 int cache_init(){
@@ -58,12 +98,12 @@ int cache_init(){
 		}
 
 		fprintf(stderr, "\033[31;1mcreating table\033[0;0m\n\n");
-		/*res = sqlite3_exec(db,
+		res = sqlite3_exec(db,
 						"PRAGMA journal_mode=WAL",
 					    NULL,
 					    NULL,
 					    NULL
-						);*/ /*TODO: possible speed up */
+						);
 
 		if( res != SQLITE_OK ){
 			fprintf(stderr,"\033[31;1mcache_init\033[0;0m %s\n", sqlite3_errmsg( db ));
@@ -94,7 +134,7 @@ int cache_init(){
 		res = sqlite3_exec(db,
 						"CREATE TABLE \"main\".\"log\" ("
 					    "path TEXT PRIMARY KEY NOT NULL,"
-						"new_path TEXT,"
+						"new_path TEXT UNIQUE,"
 						"action INT NOT NULL)",
 					    NULL,
 					    NULL,
@@ -107,7 +147,8 @@ int cache_init(){
 		}
 	}
 
-	prepare_cache_readdir(&readdir_stmt, db);
+	prepare_statements();
+	init_mutexes();
 
 	return res;
 }
@@ -121,7 +162,25 @@ int cache_init(){
    Notice   :
  ---------------------------------------------------------------------------*/
 void cache_close(){
+
+	pthread_mutex_destroy( &add_mutex );
+	pthread_mutex_destroy( &rename_mutex );
+	pthread_mutex_destroy( &remove_mutex );
+	pthread_mutex_destroy( &log_mutex );
+	pthread_mutex_destroy( &readdir_mutex );
+	pthread_mutex_destroy( &getattr_mutex );
+	pthread_mutex_destroy( &get_fmod_mutex );
+	pthread_mutex_destroy( &chmod_mutex );
+
+	sqlite3_finalize( add_stmt );
+	sqlite3_finalize( rename_stmt );
+	sqlite3_finalize( remove_stmt );
+	sqlite3_finalize( log_stmt );
 	sqlite3_finalize( readdir_stmt );
+	sqlite3_finalize( getattr_stmt );
+	sqlite3_finalize( get_fmod_stmt );
+	sqlite3_finalize( chmod_stmt );
+
 	sqlite3_close( db );
 }
 
@@ -129,27 +188,23 @@ int cache_add(const char *path, int read_hits, int write_hits, kivfs_file_type_t
 
 	int res;
 	struct stat stbuf;
-	static sqlite3_stmt *stmt = NULL;
 	char *full_path = get_full_path( path );
 
 	stat(full_path, &stbuf);
 
 	fprintf(stderr,"\033[31;1mcache_add: %s mode: %o \033[0;0m\n", path, stbuf.st_mode);
 
-	sqlite3_mutex_enter( sqlite3_db_mutex( db ) );
+	pthread_mutex_lock( &add_mutex );
 
-	cache_check_stmt(prepare_cache_add, &stmt);
-
-
-	sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, ":path"), path, ZERO_TERMINATED, NULL);
-	sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, ":size"), stbuf.st_size);
-	sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, ":mtime"), stbuf.st_mtim.tv_sec);
-	sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, ":atime"), stbuf.st_atim.tv_sec);
-	sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, ":mode"), stbuf.st_mode);
-	sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, ":read_hits"), read_hits);
-	sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, ":write_hits"), write_hits);
-	sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, ":type"), type);
-	sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, ":version"), 0);
+	bind_text(add_stmt, ":path", path);
+	bind_int(add_stmt, ":size", stbuf.st_size);
+	bind_int(add_stmt, ":mtime", stbuf.st_mtim.tv_sec);
+	bind_int(add_stmt, ":atime", stbuf.st_atim.tv_sec);
+	bind_int(add_stmt, ":mode", stbuf.st_mode);
+	bind_int(add_stmt, ":read_hits", read_hits);
+	bind_int(add_stmt, ":write_hits", write_hits);
+	bind_int(add_stmt, ":type", type);
+	bind_int(add_stmt, ":version", 0);
 
 	printf("\n\033[33;1m\tmode: %c%c%c %c%c%c %c%c%c  %o %o \033[0;0m\n",
 								stbuf.st_mode & S_IRUSR ? 'r' : '-',
@@ -165,74 +220,96 @@ int cache_add(const char *path, int read_hits, int write_hits, kivfs_file_type_t
 										S_IFDIR | S_IRWXU
 								);
 
-	res = sqlite3_step( stmt );
+	sqlite3_step( add_stmt );
 
-	if( (res = sqlite3_reset( stmt )) != SQLITE_OK ){
+	if( (res = sqlite3_reset( add_stmt )) != SQLITE_OK ){
 		fprintf(stderr,"\033[31;1mcache_add: %s\033[0;0m %s %d\n", full_path, sqlite3_errmsg( db ), res);
 		res = -EEXIST;
 	}
 
-	sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
-
+	pthread_mutex_unlock( &add_mutex );
 	free( full_path );
 	return res;
 }
 
 int cache_rename(const char *old_path, const char *new_path){
 
-	static sqlite3_stmt *stmt = NULL;
+	pthread_mutex_lock( &rename_mutex );
 
-	cache_check_stmt(prepare_cache_rename, &stmt);
+	bind_text(rename_stmt, ":old_path", old_path);
+	bind_text(rename_stmt, ":new_path", new_path);
 
-	sqlite3_mutex_enter( sqlite3_db_mutex( db ) );
+	sqlite3_step( rename_stmt );
 
-	sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, ":old_path"), old_path, ZERO_TERMINATED, NULL);
-	sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, ":new_path"), new_path, ZERO_TERMINATED, NULL);
-
-	sqlite3_step( stmt );
-
-	if( sqlite3_reset( stmt ) != SQLITE_OK ){
+	if( sqlite3_reset( rename_stmt ) != SQLITE_OK ){
 		fprintf(stderr,"\033[31;1mcache_rename: %s\033[0;0m %s %d\n", old_path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
-		sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
+		pthread_mutex_unlock( &rename_mutex );
 		//TODO everwrite existing files, if new path is directory then move file/dir into it, else EISDIR
 		return 0;
 		return -EEXIST;
 	}
 
-	sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
+	pthread_mutex_unlock( &rename_mutex );
 	return SQLITE_OK;
 }
 
 int cache_remove(const char *path){
 
-	static sqlite3_stmt *stmt = NULL;
+	int res = 0;
+	pthread_mutex_lock( &remove_mutex );
 
-	cache_check_stmt(prepare_cache_remove, &stmt);
+	bind_text(remove_stmt, ":path", path);
 
-	sqlite3_mutex_enter( sqlite3_db_mutex( db ) );
+	sqlite3_step( remove_stmt );
 
-	sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, ":path"), path, ZERO_TERMINATED, NULL);
-
-	sqlite3_step( stmt );
-
-	if( sqlite3_reset( stmt ) != SQLITE_OK ){
+	if( sqlite3_reset( remove_stmt ) != SQLITE_OK ){
 		fprintf(stderr,"\033[31;1mcache_remove: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
-		sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
-		return -ENOENT;
+		res = -ENOENT;
 	}
 
-	sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
-	return SQLITE_OK;
+	pthread_mutex_unlock( &remove_mutex );
+	return res;
 }
 
-void cache_solve_conflict(const char *path, const char *new_path, cache_conflict_t type, KIVFS_VFS_COMMAND action){
+/*----------------------------------------------------------------------------
+   Function : cache_solve_conflic(const char *path, const char *new_path, KIVFS_VFS_COMMAND action)
+   In       : path: Path to the source file is mandatory.
+   	   	   	  new path: Path to the new file, if action is KIVFS_MOVE.
+			  action: Type of action. All types are declared in kivfs-cmdn-vfs.h
+   Out      : void
+   Job      : Solves conflict in log table.
+   Notice   :
+
+   	   	   	  KIVFS_UNLINK:
+   	   	   	  KIVFS_RMDIR:
+    		  The idea is that if a file is created in offline mode and then removed before sync operation,
+   	   	   	  conflict in log occurs between (KIVFS_TOUCH or KIVFS_MKDIR) and (KIVFS_RMDIR or KIVFS_UNLINK).
+   	   	   	  It is useless sending create request to a server and immediately unlink newly created file.
+   	   	   	  So if UNLINK/RMDIR occurs after TOUCH/MKDIR the record is deleted as anti-matter and matter annihilates.
+
+   	   	   	  WRITE to unlinked file is not opossible.
+
+
+			  KIVFS_TOUCH:
+			  KIVFS_WRITE:
+   	   	   	  Sometimes can occur opposite situation. Remote file is deleted locally and in near future before sync
+   	   	   	  recreated. Informing server about unlink is not efficient due to overhead like in previous situation.
+   	   	   	  KIVFS_UNLINK is changed to KIVFS_WRITE. Why WRITE? Because it means that the file is changed and
+   	   	   	  have to be synced as soon as possible.
+
+   	   	   	  WRITE can also conflict with another WRITE. In this case WRITE flag stays the same.
+
+
+
+
+ ---------------------------------------------------------------------------*/
+void cache_solve_conflict(const char *path, const char *new_path, KIVFS_VFS_COMMAND action){
 
 	static sqlite3_stmt *move_stmt;
 	static sqlite3_stmt *unlink_stmt;
 	static sqlite3_stmt *unlink_remote_stmt;
 	static sqlite3_stmt *write_stmt;
 
-	sqlite3_mutex_enter( sqlite3_db_mutex( db ) );
 	switch( action ){
 		case KIVFS_RMDIR:
 			/* fall through */
@@ -241,7 +318,7 @@ void cache_solve_conflict(const char *path, const char *new_path, cache_conflict
 		case KIVFS_UNLINK:
 				fprintf(stderr,"\033[31;1mLOG UNLINK: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
 			cache_check_stmt(prepare_log_remove, &unlink_stmt);
-			sqlite3_bind_text(unlink_stmt, sqlite3_bind_parameter_index(unlink_stmt, ":path"), path, ZERO_TERMINATED, NULL);
+			bind_text(unlink_stmt, ":path", path);
 
 			/* Deletes single row containging action == KIVFS_MKDIR or KIVFS_TOUCH */
 			sqlite3_step( unlink_stmt );
@@ -264,9 +341,11 @@ void cache_solve_conflict(const char *path, const char *new_path, cache_conflict
 		case KIVFS_MOVE:
 				fprintf(stderr,"\033[31;1mLOG MOVE: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
 			cache_check_stmt(prepare_log_move, &move_stmt);
-			sqlite3_bind_text(move_stmt, sqlite3_bind_parameter_index(move_stmt, ":old_path"), path, ZERO_TERMINATED, NULL);
-			sqlite3_bind_text(move_stmt, sqlite3_bind_parameter_index(move_stmt, ":new_path"), new_path, ZERO_TERMINATED, NULL);
+			bind_text(move_stmt, ":old_path", path);
+			bind_text(move_stmt, ":new_path", new_path);
 			sqlite3_step( move_stmt );
+
+			//TODO what if a file is moved to previous name? DELETE movement in log!
 			if( sqlite3_reset( move_stmt ) != SQLITE_OK ){
 				fprintf(stderr,"\033[31;1mLOG update error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
 
@@ -274,15 +353,14 @@ void cache_solve_conflict(const char *path, const char *new_path, cache_conflict
 			break;
 
 		case KIVFS_TOUCH:
-			//TODO if unlink, then write
-			break;
+			/* fall through */
 
 		case KIVFS_WRITE:
 			cache_check_stmt(prepare_log_write, &write_stmt);
-			sqlite3_bind_text(move_stmt, sqlite3_bind_parameter_index(move_stmt, ":path"), path, ZERO_TERMINATED, NULL);
-			sqlite3_step( move_stmt );
+			bind_text(write_stmt, ":path", path);
+			sqlite3_step( write_stmt );
 
-			if( sqlite3_reset( move_stmt ) != SQLITE_OK ){
+			if( sqlite3_reset( write_stmt ) != SQLITE_OK ){
 				fprintf(stderr,"\033[31;1mLOG update error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
 			}
 			break;
@@ -291,43 +369,36 @@ void cache_solve_conflict(const char *path, const char *new_path, cache_conflict
 			fprintf(stderr,"\033[31;1mLOG update error: Undefined command\033[0;0m\n");
 			break;
 	}
-	sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
 }
 
 void cache_log(const char *path, const char *new_path, KIVFS_VFS_COMMAND action){
 
-	static sqlite3_stmt *stmt = NULL;
+	pthread_mutex_lock( &log_mutex );
 
-	cache_check_stmt(prepare_cache_log, &stmt);
+	bind_text(log_stmt,":path", path);
+	bind_text(log_stmt, ":new_path", new_path);
+	bind_int(log_stmt, ":action", action);
 
-	sqlite3_mutex_enter( sqlite3_db_mutex( db ) );
+	sqlite3_step( log_stmt );
 
-	sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, ":path"), path, ZERO_TERMINATED, NULL);
-	sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, ":new_path"), new_path, ZERO_TERMINATED, NULL);
-	sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, ":action"), action);
-
-	sqlite3_step( stmt );
-
-	switch( sqlite3_reset( stmt ) ){
+	switch( sqlite3_reset( log_stmt ) ){
 		case SQLITE_OK:
 			break;
 		case SQLITE_CONSTRAINT:
-			sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
-			cache_solve_conflict(path, new_path, LOG_CONFLICT, action);
-			return;
+			cache_solve_conflict(path, new_path, action);
+			break;
 		default:
 			fprintf(stderr,"\033[31;1mAction log failed: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 
-	sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
+	pthread_mutex_unlock( &log_mutex );
 }
 
 int cache_readdir(const char *path, void *buf, fuse_fill_dir_t filler){
 
-	sqlite3_mutex_enter( sqlite3_db_mutex( db ) );
+	pthread_mutex_lock( &readdir_mutex );
 
-	sqlite3_bind_text(readdir_stmt, sqlite3_bind_parameter_index(readdir_stmt, ":path"), path, ZERO_TERMINATED, NULL);
-
+	bind_text(readdir_stmt, ":path", path);
 
 	fprintf(stderr,"\033[34;1mCache readdir before: %s\033[0;0m %s err: %d %s\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ), path);
 
@@ -340,61 +411,44 @@ int cache_readdir(const char *path, void *buf, fuse_fill_dir_t filler){
 	fprintf(stderr,"\033[31;1mCache readdir: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 
 	if( sqlite3_reset( readdir_stmt ) == SQLITE_OK ){
-		sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
+		pthread_mutex_unlock( &readdir_mutex );
 		return SQLITE_OK;
 	}
 	else{
 		fprintf(stderr,"\033[31;1mCache readdir failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 
-	sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
+	pthread_mutex_unlock( &readdir_mutex );
 	return -ENOENT;
 }
 
 int cache_getattr(const char *path, struct stat *stbuf){
 
 	int res;
-	static sqlite3_stmt *stmt = NULL;
 
-	cache_check_stmt(prepare_cache_getattr, &stmt);
+	pthread_mutex_lock( &getattr_mutex );
 
-	sqlite3_mutex_enter( sqlite3_db_mutex( db ) );
-
-	sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, ":path"), path, ZERO_TERMINATED, NULL);
+	bind_text(getattr_stmt, ":path", path);
 
 
 	//should be ROW
-	if( sqlite3_step( stmt ) == SQLITE_ROW ){
+	if( sqlite3_step( getattr_stmt ) == SQLITE_ROW ){
 
-		stbuf->st_atim.tv_sec = sqlite3_column_int(stmt, 0);
-		stbuf->st_mtim.tv_sec = sqlite3_column_int(stmt, 1);
-		stbuf->st_size = sqlite3_column_int(stmt, 2);
-		stbuf->st_mode = sqlite3_column_int(stmt, 3);
+		stbuf->st_atim.tv_sec = sqlite3_column_int(getattr_stmt, 0);
+		stbuf->st_mtim.tv_sec = sqlite3_column_int(getattr_stmt, 1);
+		stbuf->st_size = sqlite3_column_int(getattr_stmt, 2);
+		stbuf->st_mode = sqlite3_column_int(getattr_stmt, 3);
 		stbuf->st_nlink = S_ISDIR(stbuf->st_mode) ? 2 : 1;
 		stbuf->st_uid = getuid();
 		stbuf->st_gid = getgid();
 
-		printf("\033[31;1msize %lu nlink: %lu \n\033[0;0m", stbuf->st_size, stbuf->st_nlink);
-		printf("\n\033[33;1m\tmode: %c%c%c %c%c%c %c%c%c  %o %o \033[0;0m\n",
-						stbuf->st_mode & S_IRUSR ? 'r' : '-',
-						stbuf->st_mode & S_IWUSR ? 'w' : '-',
-						stbuf->st_mode & S_IXUSR ? 'x' : '-',
-						stbuf->st_mode & S_IRGRP ? 'r' : '-',
-						stbuf->st_mode & S_IWGRP ? 'w' : '-',
-						stbuf->st_mode & S_IXGRP ? 'x' : '-',
-						stbuf->st_mode & S_IROTH ? 'r' : '-',
-						stbuf->st_mode & S_IWOTH ? 'w' : '-',
-						stbuf->st_mode & S_IXOTH ? 'x' : '-',
-								stbuf->st_mode,
-								S_IFDIR | S_IRWXU
-						);
 		res = F_OK;
 	}
 	else{
 		res = -ENOENT;
 	}
 
-	if( sqlite3_reset( stmt ) == SQLITE_OK ){
+	if( sqlite3_reset( getattr_stmt ) == SQLITE_OK ){
 		fprintf(stderr,"\033[31;1mCache getattr reset OK: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 	else{
@@ -404,33 +458,79 @@ int cache_getattr(const char *path, struct stat *stbuf){
 	if(!res)
 	fprintf(stderr,"\033[31;1mCache getattr EXTREME failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 
-	sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
+	pthread_mutex_unlock( &getattr_mutex );
 	return res;
 
 }
 
+//rename to get_file_mode
 mode_t cache_file_mode(const char *path ){
 
 	mode_t mode;
-	static sqlite3_stmt *stmt = NULL;
 
-	cache_check_stmt(prepare_cache_file_mode, &stmt);
+	pthread_mutex_lock( &get_fmod_mutex );
 
-	sqlite3_mutex_enter( sqlite3_db_mutex( db ) );
-	sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, ":path"), path, ZERO_TERMINATED, NULL);
+	bind_text(get_fmod_stmt, ":path", path);
 
-	if( sqlite3_step( stmt ) == SQLITE_ROW ){
-		mode = sqlite3_column_int(stmt, 0);
+	if( sqlite3_step( get_fmod_stmt ) == SQLITE_ROW ){
+		mode = sqlite3_column_int(get_fmod_stmt, 0);
 	}
 
-	if( sqlite3_reset( stmt ) == SQLITE_OK ){
-		sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
+	if( sqlite3_reset( get_fmod_stmt ) == SQLITE_OK ){
+		pthread_mutex_unlock( &get_fmod_mutex );
 		return mode;
 	}
 	else{
 		fprintf(stderr,"\033[31;1mCache readdir failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 
-	sqlite3_mutex_leave( sqlite3_db_mutex( db ) );
+	pthread_mutex_unlock( &get_fmod_mutex );
 	return -ENOENT;
+}
+
+int cache_sync(){
+
+	sqlite3_stmt *stmt;
+	sqlite3_prepare_v2(db, "SELECT * FROM log", ZERO_TERMINATED, &stmt, NULL);
+
+	pthread_mutex_lock( &sync_mutex );
+
+	while( sqlite3_step( stmt ) == SQLITE_ROW ){
+			const char *path 			= (const char *)sqlite3_column_text(stmt, 0);
+			const char *new_path		= (const char *)sqlite3_column_text(stmt ,1);
+			KIVFS_VFS_COMMAND action 	= sqlite3_column_int(stmt, 2);
+
+			if( !kivfs_remote_sync(path, new_path, action) ){
+				break;
+			}
+			else{
+				//TODO reset stmt
+			}
+	}
+
+	pthread_mutex_unlock( &sync_mutex );
+
+	return 0; //XXX
+}
+
+int cache_chmod(const char *path, mode_t mode){
+
+	pthread_mutex_lock( &chmod_mutex );
+
+	bind_text(chmod_stmt, ":path", path);
+	bind_int(chmod_stmt, ":mode", mode);
+
+	sqlite3_step( chmod_stmt );
+
+	if( sqlite3_reset( readdir_stmt ) == SQLITE_OK ){
+			pthread_mutex_unlock( &chmod_mutex );
+			return SQLITE_OK;
+	}
+	else{
+		fprintf(stderr,"\033[31;1mCache readdir failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+	}
+
+	pthread_mutex_unlock( &chmod_mutex );
+
+	return -EPERM;
 }

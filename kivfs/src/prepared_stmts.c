@@ -115,20 +115,33 @@ void prepare_cache_log(sqlite3_stmt **stmt, sqlite3 *db){
 /* if locally created file is moved before upload*/
 void prepare_log_move(sqlite3_stmt **stmt, sqlite3 *db){
 
-	char *sql = 	"UPDATE log 									"
-					"SET											"
-					"	path=										"
-					"		replace(								"
-					"			substr(path, 1, length(:old_path)),	"
-					"			:old_path,							"
-					"			:new_path							"
-					"		) 										"
-					"		|| 										"
-					"		substr(path, length(:old_path) + 1) 	"
-					"WHERE 											"
-					"	path LIKE (:old_path || '/%') 				"  //subfolders
-					"	or 											"
-					"	path LIKE :old_path							"; //file or folder
+	char *sql = 	"UPDATE log 										"
+					"SET 												"
+					"	path= CASE WHEN (action = 43 OR action = 4)		" /* MKDIR or TOUCH */
+					"	 THEN											"
+					"		replace(									" /* replace prefix with new prefix */
+					"			substr(path, 1, length(:old_path)),		"
+					"			:old_path,								"
+					"			:new_path								"
+					"		) 											"
+					"		|| 											"
+					"		substr(path, length(:old_path) + 1)			"
+					"	ELSE											"
+					"		path										"  /* don't change */
+					"	END,											"
+					"													"
+					"	new_path = CASE WHEN NOT (action = 43 OR action = 4)	"
+					"	THEN											"
+					"		:new_path									" /* replace destination */
+					"	ELSE											"
+					"		new_path									" /* don't change */
+					"	END												"
+					"													"
+					"WHERE 												"
+					"	path LIKE (:old_path || '/%') 					" /* subfolders			*/
+					"	or 												"
+					"	path LIKE :old_path								" /* file or folder 	*/
+					;
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
 		fprintf(stderr,"\033[31;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
@@ -161,6 +174,7 @@ void prepare_log_remote_remove(sqlite3_stmt **stmt, sqlite3 *db){
 		fprintf(stderr,"\033[33;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
 
 }
+
 
 void prepare_cache_file_mode(sqlite3_stmt **stmt, sqlite3 *db){
 	char *sql = 	"SELECT mode FROM files WHERE path LIKE :path	";

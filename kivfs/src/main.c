@@ -65,7 +65,7 @@ int main(int argc, char **argv){
 		return EXIT_FAILURE;
 	}
 
-	if( kivfs_init() ){
+	if( init() ){
 		fprintf(stderr, "Initialisation failed!\n");
 		return EXIT_FAILURE;
 	}

@@ -3,19 +3,25 @@ C_SRCS += \
 ./src/main.c \
 ./src/kivfs_operations.c \
 ./src/config.c \
-./src/cache.c
+./src/cache.c \
+./src/prepared_stmts.c \
+./src/connection.c
 
 OBJS += \
 $(OBJDIR)/main.o \
 $(OBJDIR)/kivfs_operations.o \
 $(OBJDIR)/config.o \
-$(OBJDIR)/cache.o
+$(OBJDIR)/cache.o \
+$(OBJDIR)/prepared_stmts.o \
+$(OBJDIR)/connection.o
 
 C_DEPS += \
 main.d \
 kivfs_operations.d \
 config.d \
-cache.d
+cache.d \
+prepared_stmts.d \
+connection.d
 
 
 # Each subdirectory must supply rules for building sources it contributes

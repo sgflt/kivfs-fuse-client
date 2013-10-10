@@ -15,6 +15,11 @@ extern struct fuse_operations kivfs_operations;
 
 /*---------------------------- CONSTANTS -----------------------------------*/
 
+typedef enum {
+	KIVFS_SYNC_UP,
+	KIVFS_SYNC_DONW
+} kivfs_sync_t;
+
 /*---------------------------- Variables -----------------------------------*/
 
 /*------------------- Functions: ANSI C prototypes -------------------------*/

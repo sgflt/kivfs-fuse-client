@@ -107,7 +107,7 @@ static int kivfs_read(const char *path, char *buf, size_t size,
 static int kivfs_write(const char *path, const char *buf, size_t size,
 		off_t offset, struct fuse_file_info *fi){
 
-	size = pwrite(fi->fh, buf, size, offset);		// by 1 byte, zaznamenána velikost skutečně načtených dat
+	size = pwrite(fi->fh, buf, size, offset);
 
 	if( size == -1 ){
 		size = -errno;
@@ -255,6 +255,7 @@ static int kivfs_mkdir(const char *path, mode_t mode){
 
 
 	if( res == -1 ){
+		//TODO recreate full cascade of dirs a and b don't exists in path /a/b/c or add dir from cache to db
 		return -errno;
 	}
 
@@ -308,6 +309,10 @@ static int kivfs_utimens(const char *path, const struct timespec tv[2]){
 static int kivfs_chmod(const char *path, mode_t mode){
 	//TODO online chmod
 
+	chmod(path, mode);
+	cache_chmod(path, mode);
+
+	kivfs_fsync();
 	return -ENOSYS;
 }
 
@@ -321,6 +326,16 @@ static void kivfs_destroy(void * ptr){
 	//TODO
 
 	cache_close();
+}
+
+int kivfs_fsync(const char *path, int data, struct fuse_file_info *fi){
+
+	if( fi ){
+		data ? fdatasync( fi->fh ) : fsync( fi->fh );
+	}
+	else{
+		cache_sync();
+	}
 }
 
 struct fuse_operations kivfs_operations = {
@@ -343,4 +358,6 @@ struct fuse_operations kivfs_operations = {
 	.utimens	= kivfs_utimens,
 	.chmod		= kivfs_chmod,
 	.init		= kivfs_init,
+	.fsync		= kivfs_fsync,
+	.destroy	= kivfs_destroy,
 };

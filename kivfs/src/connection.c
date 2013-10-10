@@ -8,36 +8,51 @@
 #include <kivfs.h>
 #include "connection.h"
 
+#define cmd_1arg(action,path) kivfs_send_and_receive(&connection, kivfs_request(KIVFS_NO_SESSION, action, path), &response)
 
 kivfs_connection_t connection;
-
-int kivfs_session_init(){
-
-	//kivfs_file_mode_t;
-
-	kivfs_set_connection(&connection, "127.0.0.1", 1337);
-	//kivfs_set_connection(&connection, "127.0.0.1", 1337); segfault because of free static string
-	kivfs_print_connection( &connection );
-
-	kivfs_connect_to(&connection.socket, "127.0.0.1", 1337, 1);
-
-	return 0;
-}
-
 
 /* should be in libkivfs.so */
 int kivfs_connect(kivfs_connection_t *connection, int attempts){
 	return kivfs_connect_to(&connection->socket, connection->ip, connection->port, attempts);
 }
 
-int kivfs_get_to_cache(const char *path){
 
-	kivfs_msg_t *msg;
+int kivfs_session_init(){
+
+	kivfs_set_connection(&connection, "127.0.0.1", 1337);
+	kivfs_print_connection( &connection );
+
+	return kivfs_connect(&connection, 1);
+}
+
+
+
+int kivfs_get_to_cache(const char *path){
+//TODO
+	kivfs_msg_t *response;
 	kivfs_list_t *files;
 
-	if( !kivfs_send_and_receive(&connection, kivfs_request(KIVFS_NO_SESSION, KIVFS_READ, path), &msg) ){
+	if( !cmd_1arg(KIVFS_READ,path) ){
 		printf("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 	}
 
+	return -ENOSYS;
+}
+
+int kivfs_remote_readdir(const char *path){
+
+	//TODO
+	kivfs_msg_t *response;
+
+	if( !cmd_1arg( KIVFS_READ, path) ){
+			printf("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+	}
+
+	return -ENOSYS;
+}
+
+int kivfs_remote_sync(const char *path, const char *new_path, KIVFS_VFS_COMMAND cmd){
+	//TODO
 	return -ENOSYS;
 }

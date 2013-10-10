@@ -15,7 +15,7 @@
 /*---------------------------- CONSTANTS -----------------------------------*/
 
 #define KIVFS_NO_SESSION 0LL
-
+#define KIVFS_MOVE_RQST_FORMAT "%s %s"
 
 /*---------------------------- Variables -----------------------------------*/
 
@@ -23,6 +23,9 @@
 
 int kivfs_get_to_cache(const char *path );
 int kivfs_session_init();
+int kivfs_connect(kivfs_connection_t *connection, int attempts);
+int kivfs_remote_readdir(const char *path);
+int kivfs_remote_sync(const char *path, const char *new_path, KIVFS_VFS_COMMAND cmd);
 
 /*----------------------------- Macros -------------------------------------*/
 

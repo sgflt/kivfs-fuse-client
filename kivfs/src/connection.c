@@ -6,6 +6,7 @@
  *	   Version: 0.0
  ---------------------------------------------------------------------------*/
 #include <kivfs.h>
+
 #include "connection.h"
 
 #define cmd_1arg(action,path) kivfs_send_and_receive(&connection, kivfs_request(KIVFS_NO_SESSION, action, path), &response)
@@ -33,26 +34,42 @@ int kivfs_get_to_cache(const char *path){
 	kivfs_msg_t *response;
 	kivfs_list_t *files;
 
-	if( !cmd_1arg(KIVFS_READ,path) ){
+	if( !cmd_1arg(KIVFS_READ, path) ){
 		printf("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 	}
 
 	return -ENOSYS;
 }
 
-int kivfs_remote_readdir(const char *path){
+int kivfs_remote_readdir(const char *path, kivfs_list_t **files){
 
-	//TODO
 	kivfs_msg_t *response;
 
-	if( !cmd_1arg( KIVFS_READ, path) ){
-			printf("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+
+	/* Send READDIR request */
+	if( !cmd_1arg( KIVFS_READDIR, path) ){
+
+		/* Check to errors on server side */
+		if( !response->head->return_code ){
+
+			/* Unpack data to files */
+			if( !kivfs_unpack(response->data, response->head->data_size, "%files", files) ){
+				return KIVFS_OK;
+			}
+		}
+
+		return response->head->return_code;
 	}
 
-	return -ENOSYS;
+	return -ENOTCONN;
 }
 
 int kivfs_remote_sync(const char *path, const char *new_path, KIVFS_VFS_COMMAND cmd){
 	//TODO
+
 	return -ENOSYS;
+}
+
+int kivfs_remote_open(){
+	return 0; //kivfs_disconnect();
 }

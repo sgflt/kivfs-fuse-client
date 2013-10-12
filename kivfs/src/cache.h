@@ -9,15 +9,12 @@
 #ifndef CACHE_H_
 #define CACHE_H_
 
+#include <fuse.h>
 #include <sys/types.h>
 
 /*---------------------------- Structures ----------------------------------*/
 
 /*---------------------------- CONSTANTS -----------------------------------*/
-typedef enum{
-	LOG_CONFLICT
-} cache_conflict_t;
-
 
 /*---------------------------- Variables -----------------------------------*/
 
@@ -31,6 +28,8 @@ void cache_log(const char *path, const char *new_path, KIVFS_VFS_COMMAND action)
 int cache_readdir(const char *path, void *buf, fuse_fill_dir_t filler);
 int cache_getattr(const char *path, struct stat *stbuf);
 mode_t cache_file_mode(const char *path);
+int cache_chmod(const char *path, mode_t mode);
+int cache_sync();
 
 /*----------------------------- Macros -------------------------------------*/
 

@@ -134,14 +134,14 @@ int cache_init(){
 		}
 
 		res = sqlite3_exec(db,
-						"CREATE TABLE \"main\".\"log\" ("
-					    "path TEXT PRIMARY KEY NOT NULL,"
-						"new_path TEXT UNIQUE,"
-						"action INT NOT NULL)",
-					    NULL,
-					    NULL,
-					    NULL
-						);
+				"CREATE TABLE 'main'.'log' (					"
+				"path 			TEXT PRIMARY KEY NOT NULL,		"
+				"new_path 		TEXT UNIQUE,					"
+				"action 		INT NOT NULL)					",
+				NULL,
+				NULL,
+				NULL
+				);
 
 		if( res != SQLITE_OK ){
 			fprintf(stderr,"\033[31;1mcache_init\033[0;0m %s\n", sqlite3_errmsg( db ));
@@ -313,6 +313,7 @@ void cache_solve_conflict(const char *path, const char *new_path, KIVFS_VFS_COMM
 	static sqlite3_stmt *unlink_stmt;
 	static sqlite3_stmt *unlink_remote_stmt;
 	static sqlite3_stmt *write_stmt;
+	static sqlite3_stmt *chmod_stmt;
 
 	switch( action ){
 		case KIVFS_RMDIR:
@@ -336,7 +337,7 @@ void cache_solve_conflict(const char *path, const char *new_path, KIVFS_VFS_COMM
 
 				sqlite3_step( unlink_remote_stmt );
 				if( sqlite3_reset( unlink_remote_stmt ) != SQLITE_OK ){
-					fprintf(stderr,"\033[31;1mLOG update error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
+					fprintf(stderr,"\033[31;1mLOG update unlink error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
 				}
 			}
 
@@ -345,13 +346,13 @@ void cache_solve_conflict(const char *path, const char *new_path, KIVFS_VFS_COMM
 		case KIVFS_MOVE:
 				fprintf(stderr,"\033[31;1mLOG MOVE: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
 			cache_check_stmt(prepare_log_move, &move_stmt);
-			bind_text(move_stmt, ":old_path", path);
-			bind_text(move_stmt, ":new_path", new_path);
+			bind_text	(move_stmt,	":old_path", path);
+			bind_text	(move_stmt,	":new_path", new_path);
 			sqlite3_step( move_stmt );
 
 			//TODO what if a file is moved to previous name? DELETE movement in log!
 			if( sqlite3_reset( move_stmt ) != SQLITE_OK ){
-				fprintf(stderr,"\033[31;1mLOG update error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
+				fprintf(stderr,"\033[31;1mLOG update move error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
 
 			}
 			break;
@@ -365,7 +366,18 @@ void cache_solve_conflict(const char *path, const char *new_path, KIVFS_VFS_COMM
 			sqlite3_step( write_stmt );
 
 			if( sqlite3_reset( write_stmt ) != SQLITE_OK ){
-				fprintf(stderr,"\033[31;1mLOG update error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
+				fprintf(stderr,"\033[31;1mLOG update write error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
+			}
+			fprintf(stderr,"\033[31;1mLOG update write: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
+			break;
+
+		case KIVFS_CHMOD:
+			cache_check_stmt(prepare_log_chmod, &chmod_stmt);
+			bind_text(chmod_stmt, ":path", path);
+			sqlite3_step( chmod_stmt );
+
+			if( sqlite3_reset( chmod_stmt ) != SQLITE_OK ){
+				fprintf(stderr,"\033[31;1mLOG update chmod error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
 			}
 			break;
 
@@ -389,6 +401,7 @@ void cache_log(const char *path, const char *new_path, KIVFS_VFS_COMMAND action)
 		case SQLITE_OK:
 			break;
 		case SQLITE_CONSTRAINT:
+			fprintf(stderr,"\033[31;1mLOG update error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
 			cache_solve_conflict(path, new_path, action);
 			break;
 		default:
@@ -528,7 +541,7 @@ int cache_chmod(const char *path, mode_t mode){
 
 	if( sqlite3_reset( readdir_stmt ) == SQLITE_OK ){
 			pthread_mutex_unlock( &chmod_mutex );
-			return SQLITE_OK;
+			return KIVFS_OK;
 	}
 	else{
 		fprintf(stderr,"\033[31;1mCache readdir failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));

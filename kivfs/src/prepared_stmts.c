@@ -8,8 +8,11 @@
 
 #include <sqlite3.h>
 #include <stdio.h>
+#include <kivfs.h>
 
+#include "kivfs_operations.h"
 #include "prepared_stmts.h"
+#include "cache.h"
 
 
 void prepare_cache_add(sqlite3_stmt **stmt, sqlite3 *db){
@@ -86,12 +89,23 @@ void prepare_cache_getattr(sqlite3_stmt **stmt, sqlite3 *db){
 /* WRITE conflict with TOUCH, TRUNCATE or another WRITE*/
 void prepare_log_write(sqlite3_stmt **stmt, sqlite3 *db){
 
-	char *sql = 	"UPDATE log										"
-					"SET action=									"
-					"	CASE WHEN action = 43 THEN 43 ELSE 9 END	"
-					"WHERE path LIKE :path							";
+	char *sql = 	"UPDATE log													"
+					"SET action=												"
+					"	CASE WHEN action=:touch 								"
+					"		THEN action 										"
+					"		ELSE 												"
+					"			CASE WHEN action=:chmod OR action=:write_chmod	"
+					"				THEN :write_chmod 							"
+					"				ELSE :write END 							"
+					"		END													"
+					"WHERE path LIKE :path										";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
+		bind_int(*stmt, ":touch", KIVFS_TOUCH);
+		bind_int(*stmt, ":write", KIVFS_WRITE);
+		bind_int(*stmt, ":chmod", KIVFS_CHMOD);
+		bind_int(*stmt, ":write_chmod", KIVFS_WRITE_CHMOD);
+
 		fprintf(stderr,"\033[31;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
@@ -131,35 +145,39 @@ void prepare_cache_log(sqlite3_stmt **stmt, sqlite3 *db){
  ---------------------------------------------------------------------------*/
 void prepare_log_move(sqlite3_stmt **stmt, sqlite3 *db){
 
-	char *sql = 	"UPDATE log 										"
-					"SET 												"
-					"	path= CASE WHEN (action = 43 OR action = 4)		" /* MKDIR or TOUCH */
-					"	 THEN											"
-					"		replace(									" /* replace prefix with new prefix */
-					"			substr(path, 1, length(:old_path)),		"
-					"			:old_path,								"
-					"			:new_path								"
-					"		) 											"
-					"		|| 											"
-					"		substr(path, length(:old_path) + 1)			"
-					"	ELSE											"
-					"		path										"  /* don't change */
-					"	END,											"
-					"													"
-					"	new_path = CASE WHEN NOT (action = 43 OR action = 4)	"
-					"	THEN											"
-					"		:new_path									" /* replace destination */
-					"	ELSE											"
-					"		new_path									" /* don't change */
-					"	END												"
-					"													"
-					"WHERE 												"
-					"	path LIKE (:old_path || '/%') 					" /* subfolders			*/
-					"	or 												"
-					"	path LIKE :old_path								" /* file or folder 	*/
+	char *sql = 	"UPDATE log 												"
+					"SET 														"
+					"	path= CASE WHEN (action = :touch OR action = :mkdir)	" /* MKDIR or TOUCH */
+					"	 THEN													"
+					"		replace(											" /* replace prefix with new prefix */
+					"			substr(path, 1, length(:old_path)),				"
+					"			:old_path,										"
+					"			:new_path										"
+					"		) 													"
+					"		|| 													"
+					"		substr(path, length(:old_path) + 1)					"
+					"	ELSE													"
+					"		path												"  /* don't change */
+					"	END,													"
+					"															"
+					"	new_path = 												"
+					"		CASE 												"
+					"			WHEN NOT (action = :touch OR action = :mkdir)	"
+					"		THEN												"
+					"			:new_path										" /* replace destination */
+					"		ELSE												"
+					"			new_path										" /* don't change */
+					"		END													"
+					"															"
+					"WHERE 														"
+					"	path LIKE (:old_path || '/%') 							" /* subfolders			*/
+					"	or 														"
+					"	path LIKE :old_path										" /* file or folder 	*/
 					;
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
+		bind_int(*stmt, ":touch", KIVFS_TOUCH);
+		bind_int(*stmt, ":mkdir", KIVFS_MKDIR);
 		fprintf(stderr,"\033[31;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
@@ -169,9 +187,12 @@ void prepare_log_move(sqlite3_stmt **stmt, sqlite3 *db){
 
 void prepare_log_remove(sqlite3_stmt **stmt, sqlite3 *db){
 
-	char *sql = 	"DELETE FROM log WHERE path LIKE :path AND (action = 43 OR action = 4)";
+	char *sql = 	"DELETE FROM log WHERE path LIKE :path AND (action=:touch OR action=:mkdir)";
+
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
+		bind_int(*stmt, ":touch", KIVFS_TOUCH);
+		bind_int(*stmt, ":mkdir", KIVFS_MKDIR);
 		fprintf(stderr,"\033[31;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
@@ -204,11 +225,24 @@ void prepare_cache_file_mode(sqlite3_stmt **stmt, sqlite3 *db){
 }
 
 void prepare_cache_chmod(sqlite3_stmt **stmt, sqlite3 *db){
-	char *sql = 	"UPDATE log SET mode = :mode WHERE path LIKE :path";
+	char *sql = 	"UPDATE files SET mode = :mode WHERE path LIKE :path";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
 		fprintf(stderr,"\033[31;1mprepare_cache_chmod:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
 		fprintf(stderr,"\033[33;1mprepare_cache_chmod:\033[0;0m %s\n", sqlite3_errmsg( db ));
+}
+
+void prepare_log_chmod(sqlite3_stmt **stmt, sqlite3 *db){
+	char *sql = 	"UPDATE log SET action=CASE WHEN action=:write THEN :write_chmod ELSE action END WHERE path LIKE :path"; //459 write+chmod
+
+	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
+		bind_int(*stmt, ":write", KIVFS_WRITE);
+		bind_int(*stmt, ":write_chmod", KIVFS_WRITE_CHMOD);
+
+		fprintf(stderr,"\033[31;1mprepare_log_chmod:\033[0;0m %s\n", sqlite3_errmsg( db ));
+	}
+	else
+		fprintf(stderr,"\033[33;1mprepare_log_chmod:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }

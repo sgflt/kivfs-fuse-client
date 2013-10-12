@@ -16,7 +16,7 @@
 
 
 void prepare_cache_add(sqlite3_stmt **stmt, sqlite3 *db){
-
+//TODO INSERT OR REPLACE
 	char *sql = 	"INSERT INTO files(path, size, mtime, atime, mode, own, grp, type, read_hits, write_hits, version)"
 					"VALUES(:path, :size, :mtime, :atime, :mode, :owner, :group, :type, :read_hits, :write_hits, :version)";
 

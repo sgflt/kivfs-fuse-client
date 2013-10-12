@@ -19,6 +19,7 @@
 #include "config.h"
 #include "cache.h"
 #include "connection.h"
+#include "tools.h"
 
 #define concat(cache_path, path) { strcat(full_path, cache_path); strcat(full_path, path); }
 
@@ -61,8 +62,14 @@ static int kivfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file
 static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		 off_t offset, struct fuse_file_info *fi){
 
+		kivfs_list_t *files;
+
 		filler(buf, ".", NULL, 0);
 		filler(buf, "..", NULL, 0);
+
+		//kivfs_remote_readdir(path, &files);
+
+		//cache_updatedir( files );
 
 		/* Read dir from cache, because user want to see all available files */
 		return cache_readdir(path, buf, filler);
@@ -125,14 +132,27 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 	char *full_path = get_full_path( path );
 
 	fi->fh = creat(full_path, mode);	// fi->fh pro rychlejší přístup, zatim k ničemu
-	free( full_path );
 
+	/* If create fails */
 	if( fi->fh == -1 ){
-		return -errno;
+
+		/* Maybe some dirs are just in database */
+		if( mkdirs( full_path ) ){
+			return -errno;
+		}
+
+		/* Try again */
+		fi->fh = creat(full_path, mode);
+
+		if( fi->fh == -1 ){
+			free( full_path );
+			return -errno;
+		}
 	}
 
+	free( full_path );
 
-	if( !cache_add(path, 0, 0, FILE_TYPE_REGULAR_FILE) ){
+	if( !cache_add(path, NULL, FILE_TYPE_REGULAR_FILE) ){
 		cache_log(path, NULL, KIVFS_TOUCH);
 		return 0;
 	}
@@ -151,7 +171,7 @@ static int kivfs_access(const char *path, int mask){
 
 	/* If a file is not present in cache, compute acces rights from database. */
 	if( res ){
-		fprintf(stderr, "\033[33;1m Access mode %o %d \033[0;0m",cache_file_mode( path ) & mask, cache_file_mode( path ) & mask ? F_OK : -EACCES);
+		fprintf(stderr, "\033[33;1m Access mode %o mask %o result %d \033[0;0m",cache_file_mode( path ), mask,  cache_file_mode( path ) & mask ? F_OK : -EACCES);
 		return cache_file_mode( path ) & mask ? F_OK : -EACCES;
 	}
 
@@ -251,15 +271,25 @@ static int kivfs_mkdir(const char *path, mode_t mode){
 	char *full_path = get_full_path( path );
 
 	res = mkdir(full_path, mode);
-	free( full_path );
-
 
 	if( res == -1 ){
-		//TODO recreate full cascade of dirs a and b don't exists in path /a/b/c or add dir from cache to db
-		return -errno;
+		/* Maybe some dirs are just in database */
+		if( mkdirs( full_path ) ){
+			return -errno;
+		}
+
+		/* Try again */
+		res = mkdir(full_path, mode);
+
+		if( res == -1 ){
+			free( full_path );
+			return -errno;
+		}
 	}
 
-	if( !cache_add(path, 0, 0, FILE_TYPE_DIRECTORY) ){
+	free( full_path );
+
+	if( !cache_add(path, NULL, FILE_TYPE_DIRECTORY) ){
 		cache_log(path, NULL, KIVFS_MKDIR);
 		return 0;
 	}
@@ -309,11 +339,14 @@ static int kivfs_utimens(const char *path, const struct timespec tv[2]){
 static int kivfs_chmod(const char *path, mode_t mode){
 	//TODO online chmod
 
-	chmod(path, mode);
-	cache_chmod(path, mode);
+	char *full_path = get_full_path( path );
 
-	kivfs_fsync();
-	return -ENOSYS;
+	chmod(full_path, mode);
+	cache_chmod(path, mode);
+	cache_log(path, NULL, KIVFS_CHMOD);
+
+	free( full_path );
+	return 0;
 }
 
 static void *kivfs_init(struct fuse_conn_info *conn){
@@ -336,6 +369,8 @@ int kivfs_fsync(const char *path, int data, struct fuse_file_info *fi){
 	else{
 		cache_sync();
 	}
+
+	return 0;
 }
 
 struct fuse_operations kivfs_operations = {
@@ -344,7 +379,7 @@ struct fuse_operations kivfs_operations = {
 	.readdir	= kivfs_readdir,
 	.open		= kivfs_open,
 	.read		= kivfs_read,
-	.access		= kivfs_access,
+	//.access		= kivfs_access,
 	.write		= kivfs_write,
 	.create		= kivfs_create,
 	.release	= kivfs_release,

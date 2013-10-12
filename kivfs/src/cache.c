@@ -186,43 +186,62 @@ void cache_close(){
 	sqlite3_close( db );
 }
 
-int cache_add(const char *path, int read_hits, int write_hits, kivfs_file_type_t type){
+int cache_add(const char *path, kivfs_file_t *file, kivfs_file_type_t type){
 
 	int res;
 	struct stat stbuf;
 	char *full_path = get_full_path( path );
 
-	stat(full_path, &stbuf);
+	if( file ){
+		pthread_mutex_lock( &add_mutex );
 
-	fprintf(stderr,"\033[31;1mcache_add: %s mode: %o \033[0;0m\n", path, stbuf.st_mode);
+		bind_text(add_stmt, ":path", file->name);
+		bind_int(add_stmt, ":size", file->size);
+		bind_int(add_stmt, ":mtime", file->mtime);
+		bind_int(add_stmt, ":atime", file->atime);
+		bind_int(add_stmt, ":mode", 0);
+		bind_int(add_stmt, ":owner", 1000);
+		bind_int(add_stmt, ":group", 1000);
+		bind_int(add_stmt, ":read_hits", file->read_hits);
+		bind_int(add_stmt, ":write_hits", file->write_hits);
+		bind_int(add_stmt, ":type", type);
+		bind_int(add_stmt, ":version", file->version);
 
-	pthread_mutex_lock( &add_mutex );
+	}
+	else{
 
-	bind_text(add_stmt, ":path", path);
-	bind_int(add_stmt, ":size", stbuf.st_size);
-	bind_int(add_stmt, ":mtime", stbuf.st_mtim.tv_sec);
-	bind_int(add_stmt, ":atime", stbuf.st_atim.tv_sec);
-	bind_int(add_stmt, ":mode", stbuf.st_mode);
-	bind_int(add_stmt, ":owner", stbuf.st_uid);
-	bind_int(add_stmt, ":group", stbuf.st_gid);
-	bind_int(add_stmt, ":read_hits", read_hits);
-	bind_int(add_stmt, ":write_hits", write_hits);
-	bind_int(add_stmt, ":type", type);
-	bind_int(add_stmt, ":version", 0);
+		stat(full_path, &stbuf);
 
-	printf("\n\033[33;1m\tmode: %c%c%c %c%c%c %c%c%c  %o %o \033[0;0m\n",
-								stbuf.st_mode & S_IRUSR ? 'r' : '-',
-								stbuf.st_mode & S_IWUSR ? 'w' : '-',
-								stbuf.st_mode & S_IXUSR ? 'x' : '-',
-								stbuf.st_mode & S_IRGRP ? 'r' : '-',
-								stbuf.st_mode & S_IWGRP ? 'w' : '-',
-								stbuf.st_mode & S_IXGRP ? 'x' : '-',
-								stbuf.st_mode & S_IROTH ? 'r' : '-',
-								stbuf.st_mode & S_IWOTH ? 'w' : '-',
-								stbuf.st_mode & S_IXOTH ? 'x' : '-',
-										stbuf.st_mode,
-										S_IFDIR | S_IRWXU
+		fprintf(stderr,"\033[31;1mcache_add: %s mode: %o \033[0;0m\n", path, stbuf.st_mode);
+
+		pthread_mutex_lock( &add_mutex );
+
+		bind_text(add_stmt, ":path", path);
+		bind_int(add_stmt, ":size", stbuf.st_size);
+		bind_int(add_stmt, ":mtime", stbuf.st_mtim.tv_sec);
+		bind_int(add_stmt, ":atime", stbuf.st_atim.tv_sec);
+		bind_int(add_stmt, ":mode", stbuf.st_mode);
+		bind_int(add_stmt, ":owner", stbuf.st_uid);
+		bind_int(add_stmt, ":group", stbuf.st_gid);
+		bind_int(add_stmt, ":read_hits", 0);
+		bind_int(add_stmt, ":write_hits", 0);
+		bind_int(add_stmt, ":type", type);
+		bind_int(add_stmt, ":version", 0);
+
+		printf("\n\033[33;1m\tmode: %c%c%c %c%c%c %c%c%c  %o %o \033[0;0m\n",
+									stbuf.st_mode & S_IRUSR ? 'r' : '-',
+									stbuf.st_mode & S_IWUSR ? 'w' : '-',
+									stbuf.st_mode & S_IXUSR ? 'x' : '-',
+									stbuf.st_mode & S_IRGRP ? 'r' : '-',
+									stbuf.st_mode & S_IWGRP ? 'w' : '-',
+									stbuf.st_mode & S_IXGRP ? 'x' : '-',
+									stbuf.st_mode & S_IROTH ? 'r' : '-',
+									stbuf.st_mode & S_IWOTH ? 'w' : '-',
+									stbuf.st_mode & S_IXOTH ? 'x' : '-',
+											stbuf.st_mode,
+											S_IFDIR | S_IRWXU
 								);
+	}
 
 	sqlite3_step( add_stmt );
 
@@ -254,7 +273,7 @@ int cache_rename(const char *old_path, const char *new_path){
 	}
 
 	pthread_mutex_unlock( &rename_mutex );
-	return SQLITE_OK;
+	return KIVFS_OK;
 }
 
 int cache_remove(const char *path){
@@ -432,7 +451,7 @@ int cache_readdir(const char *path, void *buf, fuse_fill_dir_t filler){
 
 	if( sqlite3_reset( readdir_stmt ) == SQLITE_OK ){
 		pthread_mutex_unlock( &readdir_mutex );
-		return SQLITE_OK;
+		return KIVFS_OK;
 	}
 	else{
 		fprintf(stderr,"\033[31;1mCache readdir failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
@@ -553,4 +572,18 @@ int cache_chmod(const char *path, mode_t mode){
 	pthread_mutex_unlock( &chmod_mutex );
 
 	return -EPERM;
+}
+
+int cache_updatedir(kivfs_list_t *files){
+
+	for(kivfs_adt_item_t *item = files->first; item != NULL; item = item->next){
+
+		kivfs_file_t *file = (kivfs_file_t *)(item->data);
+
+		if( !cache_add(NULL, file, file->type) ){
+			return KIVFS_ERROR;
+		}
+	}
+
+	return KIVFS_OK;
 }

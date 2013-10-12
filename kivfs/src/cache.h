@@ -21,7 +21,7 @@
 /*------------------- Functions: ANSI C prototypes -------------------------*/
 int cache_init();
 void cache_close();
-int cache_add(const char *path, int read_hits, int write_hits, kivfs_file_type_t type);
+int cache_add(const char *path, kivfs_file_t *file, kivfs_file_type_t type);
 int cache_remove(const char *path);
 int cache_rename(const char *old_path, const char *new_path);
 void cache_log(const char *path, const char *new_path, KIVFS_VFS_COMMAND action);
@@ -30,6 +30,7 @@ int cache_getattr(const char *path, struct stat *stbuf);
 mode_t cache_file_mode(const char *path);
 int cache_chmod(const char *path, mode_t mode);
 int cache_sync();
+int cache_updatedir(kivfs_list_t *files);
 
 /*----------------------------- Macros -------------------------------------*/
 

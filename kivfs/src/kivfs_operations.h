@@ -20,6 +20,8 @@ typedef enum {
 	KIVFS_SYNC_DONW
 } kivfs_sync_t;
 
+#define KIVFS_WRITE_CHMOD 459
+
 /*---------------------------- Variables -----------------------------------*/
 
 /*------------------- Functions: ANSI C prototypes -------------------------*/

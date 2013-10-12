@@ -111,16 +111,18 @@ int cache_init(){
 		}
 
 		res = sqlite3_exec(db,
-				"CREATE TABLE \"main\".\"files\" ("
-			    "path TEXT PRIMARY KEY NOT NULL,"
-				"size INT NOT NULL,"
-				"mtime INT NOT NULL,"
-				"atime INT NOT NULL,"
-				"mode INT NOT NULL,"
-			    "read_hits INT NOT NULL DEFAULT ('0'),"
-				"write_hits INT NOT NULL DEFAULT ('0'),"
-				"type INT NOT NULL,"
-				"version TEXT NOT NULL)",
+				"CREATE TABLE 'main'.'files' ("
+			    "path 			TEXT PRIMARY KEY NOT NULL,"
+				"size 			INT NOT NULL,"
+				"mtime 			INT NOT NULL,"
+				"atime 			INT NOT NULL,"
+				"mode 			INT NOT NULL,"
+				"own 			TEXT NOT NULL,"
+				"grp 			TEXT NOT NULL,"
+			    "read_hits 		INT NOT NULL DEFAULT ('0'),"
+				"write_hits 	INT NOT NULL DEFAULT ('0'),"
+				"type 			INT NOT NULL,"
+				"version 		TEXT NOT NULL)",
 			    NULL,
 			    NULL,
 			    NULL
@@ -201,6 +203,8 @@ int cache_add(const char *path, int read_hits, int write_hits, kivfs_file_type_t
 	bind_int(add_stmt, ":mtime", stbuf.st_mtim.tv_sec);
 	bind_int(add_stmt, ":atime", stbuf.st_atim.tv_sec);
 	bind_int(add_stmt, ":mode", stbuf.st_mode);
+	bind_int(add_stmt, ":owner", stbuf.st_uid);
+	bind_int(add_stmt, ":group", stbuf.st_gid);
 	bind_int(add_stmt, ":read_hits", read_hits);
 	bind_int(add_stmt, ":write_hits", write_hits);
 	bind_int(add_stmt, ":type", type);

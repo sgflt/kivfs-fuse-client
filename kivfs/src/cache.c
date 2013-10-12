@@ -335,6 +335,9 @@ void cache_solve_conflict(const char *path, const char *new_path, KIVFS_VFS_COMM
 			else if( sqlite3_changes( db ) == 0 ){
 				cache_check_stmt(prepare_log_remote_remove, &unlink_remote_stmt);
 
+				bind_text(unlink_remote_stmt, ":path", path);
+				bind_int(unlink_remote_stmt, ":action", action);
+
 				sqlite3_step( unlink_remote_stmt );
 				if( sqlite3_reset( unlink_remote_stmt ) != SQLITE_OK ){
 					fprintf(stderr,"\033[31;1mLOG update unlink error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));

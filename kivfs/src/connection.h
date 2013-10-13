@@ -14,8 +14,17 @@
 
 /*---------------------------- CONSTANTS -----------------------------------*/
 
-#define KIVFS_NO_SESSION 0LL
-#define KIVFS_MOVE_RQST_FORMAT "%s %s"
+#define KIVFS_NO_SESSION		0LL
+#define KIVFS_MOVE_RQST_FORMAT	"%s %s" 			/* source destination */
+#define KIVFS_STRING_FORMAT		"%s"
+#define KIVFS_OPEN_FORMAT		"%s %d"				/* path mode */
+#define KIVFS_FLUSH_FORMAT		"%llu"				/* fd */
+#define	 KIVFS_READ_FORMAT		"%llu %llu %llu" 	/* fd size "asi offset sakra kdo to má luštit bez dokumentace" */
+#define KIVFS_CLOSE_FORMAT		KIVFS_STRING_FORMAT	/* path */
+#define KIVFS_READDIR_FORMAT	KIVFS_STRING_FORMAT	/* path */
+
+#define KIVFS_UPCK_SRV_FORMAT	"%llu %s %su"		/* socket ip port */
+#define KIVFS_UPCK_DIR_FORMAT	"%files"			/* kivfs_list_t */
 
 /*---------------------------- Variables -----------------------------------*/
 

@@ -17,8 +17,8 @@
 
 void prepare_cache_add(sqlite3_stmt **stmt, sqlite3 *db){
 //TODO INSERT OR REPLACE
-	char *sql = 	"INSERT INTO files(path, size, mtime, atime, mode, own, grp, type, read_hits, write_hits, version)"
-					"VALUES(:path, :size, :mtime, :atime, :mode, :owner, :group, :type, :read_hits, :write_hits, :version)";
+	char *sql = 	"INSERT INTO files(path, size, mtime, atime, mode, own, grp, read_hits, write_hits, version)"
+					"VALUES(:path, :size, :mtime, :atime, :mode, :owner, :group, :read_hits, :write_hits, :version)";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
 		fprintf(stderr,"\033[31;1mprepare_cache_add:\033[0;0m %s\n", sqlite3_errmsg( db ));

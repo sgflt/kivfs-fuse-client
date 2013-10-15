@@ -13,6 +13,13 @@
 /*---------------------------- Structures ----------------------------------*/
 extern struct fuse_operations kivfs_operations;
 
+typedef struct kivfs_ofile_st {
+	unsigned long fd;
+	unsigned long r_fd;
+	kivfs_connection_t connection;
+	int write;
+} kivfs_ofile_t;
+
 /*---------------------------- CONSTANTS -----------------------------------*/
 
 typedef enum {

@@ -121,7 +121,7 @@ int cache_init(){
 				"grp 			TEXT NOT NULL,"
 			    "read_hits 		INT NOT NULL DEFAULT ('0'),"
 				"write_hits 	INT NOT NULL DEFAULT ('0'),"
-				"type 			INT NOT NULL,"
+				//"type 			INT NOT NULL,"
 				"version 		TEXT NOT NULL)",
 			    NULL,
 			    NULL,
@@ -186,31 +186,56 @@ void cache_close(){
 	sqlite3_close( db );
 }
 
-int cache_add(const char *path, kivfs_file_t *file, kivfs_file_type_t type){
+int cache_add(const char *path, kivfs_file_t *file){
 
 	int res;
-	struct stat stbuf;
-	char *full_path = get_full_path( path );
+
+
 
 	if( file ){
+		char tmp[4096];
+		mode_t mode;
+
+		memset(tmp, 0, 4096);
+		strcat(tmp, path);
+		if(strcmp(path, "/") != 0)
+			strcat(tmp, "/");
+		strcat(tmp, file->name);
+
+		mode = (file->acl->owner << 6) | (file->acl->group << 3) | (file->acl->other);
+
 		pthread_mutex_lock( &add_mutex );
 
-		bind_text(add_stmt, ":path", file->name);
-		bind_int(add_stmt, ":size", file->size);
-		bind_int(add_stmt, ":mtime", file->mtime);
-		bind_int(add_stmt, ":atime", file->atime);
-		bind_int(add_stmt, ":mode", 0);
-		bind_int(add_stmt, ":owner", 1000);
-		bind_int(add_stmt, ":group", 1000);
-		bind_int(add_stmt, ":read_hits", file->read_hits);
-		bind_int(add_stmt, ":write_hits", file->write_hits);
-		bind_int(add_stmt, ":type", type);
-		bind_int(add_stmt, ":version", file->version);
+		bind_text(add_stmt,	":path",		tmp);
+		bind_int(add_stmt,	":size",		file->size);
+		bind_int(add_stmt,	":mtime",		file->mtime);
+		bind_int(add_stmt,	":atime",		file->atime);
+		bind_int(add_stmt,	":mode",	 	mode | (file->type == FILE_TYPE_DIRECTORY ? 0040000 : 0100000) );
+		bind_int(add_stmt,	":owner",		getuid());
+		bind_int(add_stmt,	":group",		getgid());
+		bind_int(add_stmt,	":read_hits",	file->read_hits);
+		bind_int(add_stmt,	":write_hits",	file->write_hits);
+		//bind_int(add_stmt,	":type",		type);
+		bind_int(add_stmt,	":version",		file->version);
+
+		fprintf(stderr," %d %d %d %o\n"
+				"file type: %d\n"
+				"path: %s",
+				file->acl->owner,
+				file->acl->group,
+				file->acl->other,
+				(file->acl->owner << 9) | (file->acl->group << 6) | (file->acl->other),
+				file->type,
+				tmp
+			);
 
 	}
 	else{
+		struct stat stbuf;
+		char *full_path = get_full_path( path );
 
 		stat(full_path, &stbuf);
+		free( full_path );
 
 		fprintf(stderr,"\033[31;1mcache_add: %s mode: %o \033[0;0m\n", path, stbuf.st_mode);
 
@@ -225,7 +250,7 @@ int cache_add(const char *path, kivfs_file_t *file, kivfs_file_type_t type){
 		bind_int(add_stmt, ":group", stbuf.st_gid);
 		bind_int(add_stmt, ":read_hits", 0);
 		bind_int(add_stmt, ":write_hits", 0);
-		bind_int(add_stmt, ":type", type);
+		//bind_int(add_stmt, ":type", type);
 		bind_int(add_stmt, ":version", 0);
 
 		printf("\n\033[33;1m\tmode: %c%c%c %c%c%c %c%c%c  %o %o \033[0;0m\n",
@@ -246,12 +271,11 @@ int cache_add(const char *path, kivfs_file_t *file, kivfs_file_type_t type){
 	sqlite3_step( add_stmt );
 
 	if( (res = sqlite3_reset( add_stmt )) != SQLITE_OK ){
-		fprintf(stderr,"\033[31;1mcache_add: %s\033[0;0m %s %d\n", full_path, sqlite3_errmsg( db ), res);
+		fprintf(stderr,"\033[31;1mcache_add: %s\033[0;0m %s %d\n", path, sqlite3_errmsg( db ), res);
 		res = -EEXIST;
 	}
 
 	pthread_mutex_unlock( &add_mutex );
-	free( full_path );
 	return res;
 }
 
@@ -481,7 +505,9 @@ int cache_getattr(const char *path, struct stat *stbuf){
 		stbuf->st_uid = getuid();
 		stbuf->st_gid = getgid();
 
-		res = F_OK;
+		res = KIVFS_OK;
+
+		fprintf(stderr,"\033[33;1m found\n\033[0m");
 	}
 	else{
 		res = -ENOENT;
@@ -530,7 +556,9 @@ mode_t cache_file_mode(const char *path ){
 int cache_sync(){
 
 	sqlite3_stmt *stmt;
+	sqlite3_stmt *delete_log_stmt;
 	sqlite3_prepare_v2(db, "SELECT * FROM log", ZERO_TERMINATED, &stmt, NULL);
+	sqlite3_prepare_v2(db, "DELETE FROM log WHERE action=:action AND path LIKE :path", ZERO_TERMINATED, &delete_log_stmt, NULL);
 
 	pthread_mutex_lock( &sync_mutex );
 
@@ -540,10 +568,14 @@ int cache_sync(){
 			KIVFS_VFS_COMMAND action 	= sqlite3_column_int(stmt, 2);
 
 			if( !kivfs_remote_sync(path, new_path, action) ){
-				break;
+				bind_text(delete_log_stmt,":path", path);
+				bind_int(delete_log_stmt,":action", action);
+
+				sqlite3_step( delete_log_stmt );
+				sqlite3_reset( delete_log_stmt );
 			}
 			else{
-				//TODO reset stmt
+				//break;
 			}
 	}
 
@@ -580,7 +612,7 @@ int cache_updatedir(kivfs_list_t *files){
 
 		kivfs_file_t *file = (kivfs_file_t *)(item->data);
 
-		if( !cache_add(NULL, file, file->type) ){
+		if( !cache_add(NULL, file) ){
 			return KIVFS_ERROR;
 		}
 	}

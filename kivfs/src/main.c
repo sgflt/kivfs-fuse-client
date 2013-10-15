@@ -79,7 +79,9 @@ int main(int argc, char **argv){
 	     FUSE_OPT_END
 	};
 
+
 	fuse_opt_parse(&args, NULL, kivfs_opts, kivfs_opt_proc);
+	fuse_opt_add_arg(&args, "-obig_writes");
 
 	return fuse_main(args.argc, args.argv, &kivfs_operations, NULL);
 }

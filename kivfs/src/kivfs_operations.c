@@ -20,6 +20,7 @@
 #include "cache.h"
 #include "connection.h"
 #include "tools.h"
+#include "kivfs_operations.h"
 
 #define concat(cache_path, path) { strcat(full_path, cache_path); strcat(full_path, path); }
 
@@ -56,7 +57,7 @@ static int kivfs_getattr(const char *path, struct stat *stbuf){
 }
 
 static int kivfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi){
-	return fstat(fi->fh, stbuf);
+	return fstat(((kivfs_ofile_t *)fi->fh)->fd, stbuf);
 }
 
 static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
@@ -67,9 +68,20 @@ static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		filler(buf, ".", NULL, 0);
 		filler(buf, "..", NULL, 0);
 
-		//kivfs_remote_readdir(path, &files);
+		if( !kivfs_remote_readdir(path, &files) ){
+			for(kivfs_adt_item_t *item = files->first; item != NULL; item = item->next){
 
-		//cache_updatedir( files );
+
+				cache_add(path, item->data);
+			}
+		}
+		else{
+			fprintf(stderr, "\033[33;1mkivfs remote readdir error");
+		}
+
+
+
+		//TODO cache_updatedir( files );
 
 		/* Read dir from cache, because user want to see all available files */
 		return cache_readdir(path, buf, filler);
@@ -87,10 +99,17 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi){
 	}
 
 	//TODO: check version
+	fi->fh = (unsigned long)malloc( sizeof( kivfs_ofile_t ) );
 
-	fi->fh = open(full_path , fi->flags);
+	if( !fi->fh ){
+		return -ENOMEM;
+	}
 
-	if( fi->fh == -1 ){
+	memset((kivfs_ofile_t *)fi->fh, 0, sizeof(kivfs_ofile_t));
+
+	((kivfs_ofile_t *)fi->fh)->fd = open(full_path , fi->flags);
+
+	if( ((kivfs_ofile_t *)fi->fh)->fd == -1 ){
 		res = -errno;
 	}
 
@@ -102,7 +121,7 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi){
 static int kivfs_read(const char *path, char *buf, size_t size,
 		off_t offset, struct fuse_file_info *fi){
 
-		size = pread(fi->fh, buf, size, offset);
+		size = pread(((kivfs_ofile_t *)fi->fh)->fd, buf, size, offset);
 
 		if( size == -1 ){
 			size = -errno;
@@ -114,13 +133,13 @@ static int kivfs_read(const char *path, char *buf, size_t size,
 static int kivfs_write(const char *path, const char *buf, size_t size,
 		off_t offset, struct fuse_file_info *fi){
 
-	size = pwrite(fi->fh, buf, size, offset);
+	size = pwrite(((kivfs_ofile_t *)fi->fh)->fd, buf, size, offset);
 
 	if( size == -1 ){
 		size = -errno;
 	}
 	else{
-		cache_log(path, NULL, KIVFS_WRITE);
+		((kivfs_ofile_t *)fi->fh)->write = 1;
 	}
 
 	return size;
@@ -131,10 +150,18 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 
 	char *full_path = get_full_path( path );
 
-	fi->fh = creat(full_path, mode);	// fi->fh pro rychlejší přístup, zatim k ničemu
+	fi->fh = (unsigned long)malloc( sizeof( kivfs_ofile_t ) );
+
+	if( !fi->fh ){
+		return -ENOMEM;
+	}
+
+	memset((kivfs_ofile_t *)fi->fh, 0, sizeof(kivfs_ofile_t));
+
+	((kivfs_ofile_t *)fi->fh)->fd = creat(full_path, mode);	// fi->fh pro rychlejší přístup, zatim k ničemu
 
 	/* If create fails */
-	if( fi->fh == -1 ){
+	if( ((kivfs_ofile_t *)fi->fh)->fd == -1 ){
 
 		/* Maybe some dirs are just in database */
 		if( mkdirs( full_path ) ){
@@ -142,9 +169,9 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 		}
 
 		/* Try again */
-		fi->fh = creat(full_path, mode);
+		((kivfs_ofile_t *)fi->fh)->fd = creat(full_path, mode);
 
-		if( fi->fh == -1 ){
+		if( ((kivfs_ofile_t *)fi->fh)->fd == -1 ){
 			free( full_path );
 			return -errno;
 		}
@@ -152,7 +179,7 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 
 	free( full_path );
 
-	if( !cache_add(path, NULL, FILE_TYPE_REGULAR_FILE) ){
+	if( !cache_add(path, NULL) ){
 		cache_log(path, NULL, KIVFS_TOUCH);
 		return 0;
 	}
@@ -182,7 +209,14 @@ static int kivfs_release(const char *path, struct fuse_file_info *fi){
 
 	//TODO: odeslat změny na server
 	//fcntl(fd, F_GETFD) pro zjištění lokality deskriptoru
-	return close( fi->fh );
+	close( ((kivfs_ofile_t *)fi->fh)->fd );
+
+	if( ((kivfs_ofile_t *)fi->fh)->write ){
+		cache_log(path, NULL, KIVFS_WRITE);
+	}
+
+	free( (kivfs_ofile_t *)fi->fh );
+	return 0;
 }
 
 static int kivfs_truncate(const char *path, off_t size){
@@ -205,7 +239,7 @@ static int kivfs_truncate(const char *path, off_t size){
 
 static int kivfs_ftruncate(const char *path, off_t size, struct fuse_file_info *fi){
 
-	if( ftruncate(fi->fh, size) ){
+	if( ftruncate(((kivfs_ofile_t *)fi->fh)->fd, size) ){
 		return -errno;
 	}
 
@@ -239,7 +273,7 @@ int kivfs_lock(const char *path, struct fuse_file_info *fi, int cmd, struct floc
 
 	int res;
 
-	res = ulockmgr_op(fi->fh, cmd,lock, &fi->lock_owner, sizeof(fi->lock_owner));
+	res = ulockmgr_op(((kivfs_ofile_t *)fi->fh)->fd, cmd,lock, &fi->lock_owner, sizeof(fi->lock_owner));
 
 	if( res == -1 ){
 		res = -errno;
@@ -289,8 +323,9 @@ static int kivfs_mkdir(const char *path, mode_t mode){
 
 	free( full_path );
 
-	if( !cache_add(path, NULL, FILE_TYPE_DIRECTORY) ){
+	if( !cache_add(path, NULL) ){
 		cache_log(path, NULL, KIVFS_MKDIR);
+		cache_sync();
 		return 0;
 	}
 
@@ -304,19 +339,21 @@ static int kivfs_rmdir(const char *path){
 	// FLAG_AS_REMOVED + SYNC || DELETE
 	if( !cache_remove( path ) ){
 		char *full_path = get_full_path( path );
-		int res;
 
 		/* If a directory contains files, then rmdir will fail */
-		res =  rmdir( full_path );
+		rmdir( full_path );
 		free( full_path );
 
-		/* Log rmdir only if it was succesful */
-		if( !res ){
-			cache_log(path, NULL, KIVFS_RMDIR);
-			return 0;
-		}
 
-		return -errno;
+
+		/* Log rmdir  */
+
+		cache_log(path, NULL, KIVFS_RMDIR);
+
+		/* Upload action if possible */
+		cache_sync();
+
+		return KIVFS_OK;
 	}
 
 	return -ENOENT;
@@ -359,12 +396,15 @@ static void kivfs_destroy(void * ptr){
 	//TODO
 
 	cache_close();
+	kivfs_session_disconnect();
+
+	fprintf(stderr, "ALL OK\n");
 }
 
 int kivfs_fsync(const char *path, int data, struct fuse_file_info *fi){
 
 	if( fi ){
-		data ? fdatasync( fi->fh ) : fsync( fi->fh );
+		data ? fdatasync( ((kivfs_ofile_t *)fi->fh)->fd ) : fsync( ((kivfs_ofile_t *)fi->fh)->fd );
 	}
 	else{
 		cache_sync();

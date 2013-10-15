@@ -17,10 +17,12 @@ static char *cache_path = "/tmp/fusetmp"; //TODO: nastavit v init
 
 kivfs_server_t server = {
 		.id = 0,
-		.name = "localhost",
+		.name = "zcu",
 		.priority = 0,
-		.public_ip = "127.0.0.1",
+		.public_ip = "147.228.63.46",
 };
+
+kivfs_client_t  *client = NULL;
 
 
 kivfs_server_t *get_server(){

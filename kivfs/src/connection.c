@@ -165,7 +165,7 @@ int kivfs_get_to_cache(const char *path){
 		return res;
 	}
 
-	res = kivfs_remote_open(path, &file, KIVFS_FILE_MODE_READ);
+	res = kivfs_remote_open(path, KIVFS_FILE_MODE_READ, &file);
 
 	if( res ){
 		fprintf(stderr,"\033[34;1mFile open failed %s\033[0m\n", path);
@@ -268,7 +268,7 @@ int kivfs_remote_sync(const char *path, const char *new_path, KIVFS_VFS_COMMAND 
 			return kivfs_remote_rmdir( path );
 
 		//case KIVFS_TOUCH:
-		//	return kivfs_remote_touch(path, mode);
+		//	return kivfs_remote_touch( path );
 
 		//case KIVFS_WRITE:
 		//	return kivfs_remote_write();
@@ -302,7 +302,7 @@ kivfs_file_mode_t mode_utok(mode_t mode){
 	return KIVFS_FILE_MODE_READ_WRITE;
 }
 
-int kivfs_remote_open(const char *path, kivfs_ofile_t *file, mode_t mode){
+int kivfs_remote_open(const char *path, mode_t mode, kivfs_ofile_t *file){
 
 	int res;
 	kivfs_msg_t *response;
@@ -354,7 +354,7 @@ int kivfs_remote_flush(kivfs_ofile_t *file){
 	int res;
 	kivfs_msg_t *response;
 
-	/* Send CLOSE request */
+	/* Send FLUSH request */
 	res = kivfs_send_and_receive(
 			&file->connection,
 			kivfs_request(
@@ -402,6 +402,10 @@ int kivfs_remote_close(kivfs_ofile_t *file){
 
 	if( !res ){
 		res = response->head->return_code;
+		fprintf(stderr, "\033[33;1mFile NOT closed.\033[0m\n");
+	}
+	else{
+		fprintf(stderr, "\033[31;1mFile closed.\033[0m");
 	}
 
 	kivfs_free_msg( response );
@@ -454,9 +458,23 @@ int kivfs_remote_rmdir(const char *path){
 	return cmd_1arg(&connection, path, KIVFS_RMDIR);
 }
 
-int kivfs_remote_create(const char *path, mode_t mode, struct fuse_file_info *fi){
+int kivfs_remote_touch(const char *path){
 	return cmd_1arg(&connection, path, KIVFS_TOUCH);
 }
+
+int kivfs_remote_create(const char *path, mode_t mode, kivfs_ofile_t *file){
+
+	int ret;
+
+	ret = kivfs_remote_touch( path );
+
+	if( !ret ){
+		ret = kivfs_remote_open(path, mode, file);
+	}
+
+	return ret;
+}
+
 
 int kivfs_remote_write(){
  return -ENOSYS;

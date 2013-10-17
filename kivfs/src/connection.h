@@ -42,7 +42,8 @@ int kivfs_connect(kivfs_connection_t *connection, int attempts);
 void kivfs_session_disconnect();
 int kivfs_remote_readdir(const char *path, kivfs_list_t **files);
 int kivfs_remote_sync(const char *path, const char *new_path, KIVFS_VFS_COMMAND cmd);
-int kivfs_remote_open(const char *path, kivfs_ofile_t *file, mode_t mode);
+int kivfs_remote_open(const char *path, mode_t mode,  kivfs_ofile_t *file);
+int kivfs_remote_close(kivfs_ofile_t *file);
 int kivfs_remote_mkdir(const char *path);
 int kivfs_remote_rmdir(const char *path);
 

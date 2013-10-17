@@ -208,14 +208,19 @@ static int kivfs_access(const char *path, int mask){
 static int kivfs_release(const char *path, struct fuse_file_info *fi){
 
 	//TODO: odeslat změny na server
-	//fcntl(fd, F_GETFD) pro zjištění lokality deskriptoru
-	close( ((kivfs_ofile_t *)fi->fh)->fd );
+	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
-	if( ((kivfs_ofile_t *)fi->fh)->write ){
+	close( file->fd );
+
+	if( file->r_fd ){
+		kivfs_remote_close( file );
+	}
+
+	if( file->write ){
 		cache_log(path, NULL, KIVFS_WRITE);
 	}
 
-	free( (kivfs_ofile_t *)fi->fh );
+	free( (void *)fi->fh );
 	return 0;
 }
 

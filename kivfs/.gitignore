@@ -3,3 +3,4 @@
 /subdir.mk
 /bin
 /obj
+/.gitignore

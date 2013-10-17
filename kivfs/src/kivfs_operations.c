@@ -90,27 +90,27 @@ static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 static int kivfs_open(const char *path, struct fuse_file_info *fi){
 
 	int res = 0;
+	kivfs_ofile_t *file;
 	char *full_path = get_full_path( path );
 
-	if( access(full_path, F_OK) != F_OK ){
-		//TODO: download from server
 
-		return kivfs_get_to_cache( path );
-	}
 
 	//TODO: check version
-	fi->fh = (unsigned long)malloc( sizeof( kivfs_ofile_t ) );
+	file = (kivfs_ofile_t *)malloc( sizeof( kivfs_ofile_t ) );
 
-	if( !fi->fh ){
+	if( !file ){
 		return -ENOMEM;
 	}
 
-	memset((kivfs_ofile_t *)fi->fh, 0, sizeof(kivfs_ofile_t));
+	fi->fh = (unsigned long)file;
+	memset(file, 0, sizeof(kivfs_ofile_t));
 
-	((kivfs_ofile_t *)fi->fh)->fd = open(full_path , fi->flags);
+	file->fd = open(full_path , fi->flags);
 
-	if( ((kivfs_ofile_t *)fi->fh)->fd == -1 ){
-		res = -errno;
+	if( file->fd == -1 ){
+		//res = -errno;
+
+		res = kivfs_remote_open(path, fi->flags, file);
 	}
 
 
@@ -148,20 +148,22 @@ static int kivfs_write(const char *path, const char *buf, size_t size,
 static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi){
 
 
+	kivfs_ofile_t *file;
 	char *full_path = get_full_path( path );
 
-	fi->fh = (unsigned long)malloc( sizeof( kivfs_ofile_t ) );
+	file = (kivfs_ofile_t *)malloc( sizeof( kivfs_ofile_t ) );
 
-	if( !fi->fh ){
+	if( !file ){
 		return -ENOMEM;
 	}
 
-	memset((kivfs_ofile_t *)fi->fh, 0, sizeof(kivfs_ofile_t));
+	fi->fh = (unsigned long)file;
+	memset(file, 0, sizeof(kivfs_ofile_t));
 
-	((kivfs_ofile_t *)fi->fh)->fd = creat(full_path, mode);	// fi->fh pro rychlejší přístup, zatim k ničemu
+	file->fd = creat(full_path, mode);	// fi->fh pro rychlejší přístup, zatim k ničemu
 
 	/* If create fails */
-	if( ((kivfs_ofile_t *)fi->fh)->fd == -1 ){
+	if( file->fd == -1 ){
 
 		/* Maybe some dirs are just in database */
 		if( mkdirs( full_path ) ){
@@ -169,18 +171,23 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 		}
 
 		/* Try again */
-		((kivfs_ofile_t *)fi->fh)->fd = creat(full_path, mode);
+		file->fd = creat(full_path, mode);
 
-		if( ((kivfs_ofile_t *)fi->fh)->fd == -1 ){
+		if( file->fd == -1 ){
 			free( full_path );
 			return -errno;
 		}
 	}
 
+
+
 	free( full_path );
 
 	if( !cache_add(path, NULL) ){
-		cache_log(path, NULL, KIVFS_TOUCH);
+		if( !kivfs_remote_create(path, mode, file) ){
+			//TODO check type of error
+			cache_log(path, NULL, KIVFS_TOUCH);
+		}
 		return 0;
 	}
 
@@ -213,14 +220,19 @@ static int kivfs_release(const char *path, struct fuse_file_info *fi){
 	close( file->fd );
 
 	if( file->r_fd ){
-		kivfs_remote_close( file );
+		if( kivfs_remote_close( file ) ){
+			fprintf(stderr, "Error: Close remote file");
+		}
+		else{
+			fprintf(stderr, "File CLOSED");
+		}
 	}
 
 	if( file->write ){
 		cache_log(path, NULL, KIVFS_WRITE);
 	}
 
-	free( (void *)fi->fh );
+	free( file );
 	return 0;
 }
 

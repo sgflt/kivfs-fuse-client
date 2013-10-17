@@ -89,8 +89,8 @@ int kivfs_login(const char *username, const char *password){
 
 
 int kivfs_session_init(){
-
-	kivfs_set_connection(&connection, "147.228.63.46", 30003);
+//147.228.63.46		147.228.63.47	 147.228.63.48
+	kivfs_set_connection(&connection, "147.228.63.48", 30003);
 	kivfs_print_connection( &connection );
 
 	kivfs_connect(&connection, 1);
@@ -128,18 +128,23 @@ int kivfs_remote_file_info(const char * path, kivfs_file_t *file){
 	if( !res ){
 		fprintf(stderr,"\033[33;1mFile info request sent %s\033[0m\n", path);
 
-		res = kivfs_unpack(
-				response->data,
-				response->head->data_size,
-				KIVFS_UPCK_FILE_FORMAT,
-				file
-				);
+		res = response->head->return_code;
 
 		if( !res ){
-			fprintf(stderr,"\033[33;1mFile info complete %s\033[0m\n", path);
-		}
-		else{
-			printf("\033[33;1mFile not unpacked!\033[0m");
+			res = kivfs_unpack(
+					response->data,
+					response->head->data_size,
+					KIVFS_UPCK_FILE_FORMAT,
+					file
+					);
+
+			if( !res ){
+				fprintf(stderr,"\033[33;1mFile info complete %s\033[0m\n", path);
+				//kivfs_print_file( file );
+			}
+			else{
+				printf("\033[33;1mFile not unpacked!\033[0m");
+			}
 		}
 	}
 
@@ -165,10 +170,11 @@ int kivfs_get_to_cache(const char *path){
 		return res;
 	}
 
+
 	res = kivfs_remote_open(path, KIVFS_FILE_MODE_READ, &file);
 
 	if( res ){
-		fprintf(stderr,"\033[34;1mFile open failed %s\033[0m\n", path);
+		fprintf(stderr,"\033[31;1mFile open failed %s\033[0m\n", path);
 		return res;
 	}
 
@@ -219,7 +225,7 @@ int kivfs_get_to_cache(const char *path){
 		}
 	}
 
-	kivfs_disconnect(file.connection.socket);
+	//kivfs_disconnect(file.connection.socket);
 	kivfs_free_msg( response );
 	return res;
 }
@@ -267,8 +273,8 @@ int kivfs_remote_sync(const char *path, const char *new_path, KIVFS_VFS_COMMAND 
 		case KIVFS_RMDIR:
 			return kivfs_remote_rmdir( path );
 
-		//case KIVFS_TOUCH:
-		//	return kivfs_remote_touch( path );
+		case KIVFS_TOUCH:
+			return kivfs_remote_touch( path );
 
 		//case KIVFS_WRITE:
 		//	return kivfs_remote_write();
@@ -324,7 +330,7 @@ int kivfs_remote_open(const char *path, mode_t mode, kivfs_ofile_t *file){
 
 	if( !res ){
 
-		fprintf(stderr,"\033[32;1;mremote open: OK\033[0m\n");
+		fprintf(stderr,"\033[31;1;mremote open: REQUEST OK\033[0m\n");
 		/* Check to errors on server side */
 		res = response->head->return_code;
 		if( !res ){
@@ -338,10 +344,14 @@ int kivfs_remote_open(const char *path, mode_t mode, kivfs_ofile_t *file){
 					&file->connection.ip,
 					&file->connection.port
 					);
+
 			if( !res ){
-				fprintf(stderr,"\033[32;1;mremote open: FILE OK\033[0m\n");
+				fprintf(stderr,"\033[31;1;mremote open: FILE OK\033[0m\n");
 				kivfs_print_connection(&file->connection);
 			}
+		}
+		else{
+			fprintf(stderr,"\033[31;1;mremote open: FAIL\033[0m\n");
 		}
 	}
 
@@ -356,7 +366,7 @@ int kivfs_remote_flush(kivfs_ofile_t *file){
 
 	/* Send FLUSH request */
 	res = kivfs_send_and_receive(
-			&file->connection,
+			&connection,
 			kivfs_request(
 					sessid,
 					KIVFS_FLUSH,
@@ -371,6 +381,13 @@ int kivfs_remote_flush(kivfs_ofile_t *file){
 		res = response->head->return_code;
 	}
 
+	if( !res ){
+		fprintf(stderr, "\033[35;1mFile FLUSH OK\033[0m");
+	}
+	else{
+		fprintf(stderr, "\033[31;1mFile FLUSH FAIL\033[0m");
+	}
+
 	kivfs_free_msg( response );
 	return res;
 
@@ -381,16 +398,12 @@ int kivfs_remote_close(kivfs_ofile_t *file){
 	int res;
 	kivfs_msg_t *response;
 
-	res = kivfs_remote_flush( file );
-
-	if( !res ){
-		return res;
-	}
+	kivfs_remote_flush( file );
 
 
 	/* Send CLOSE request */
 	res = kivfs_send_and_receive(
-			&file->connection,
+			&connection,
 			kivfs_request(
 					sessid,
 					KIVFS_CLOSE,
@@ -402,12 +415,16 @@ int kivfs_remote_close(kivfs_ofile_t *file){
 
 	if( !res ){
 		res = response->head->return_code;
-		fprintf(stderr, "\033[33;1mFile NOT closed.\033[0m\n");
-	}
-	else{
-		fprintf(stderr, "\033[31;1mFile closed.\033[0m");
 	}
 
+	if( !res ){
+		fprintf(stderr, "\033[35;1mFile close OK\033[0m\n");
+	}
+	else{
+		fprintf(stderr, "\033[31;1mFile close FAIL\033[0m\n");
+	}
+
+	kivfs_disconnect( file->connection.socket );
 	kivfs_free_msg( response );
 	return res;
 }
@@ -464,15 +481,22 @@ int kivfs_remote_touch(const char *path){
 
 int kivfs_remote_create(const char *path, mode_t mode, kivfs_ofile_t *file){
 
-	int ret;
+	int res;
 
-	ret = kivfs_remote_touch( path );
+	res = kivfs_remote_touch( path );
 
-	if( !ret ){
-		ret = kivfs_remote_open(path, mode, file);
+	if( !res ){
+		res = kivfs_remote_open(path, mode, file);
 	}
 
-	return ret;
+	if( !res ){
+		fprintf(stderr, "\033[35;1mFile CREATE OK.\033[0m\n");
+	}
+	else{
+		fprintf(stderr, "\033[31;1mFile CREATE FAIL.\033[0m");
+	}
+
+	return res;
 }
 
 

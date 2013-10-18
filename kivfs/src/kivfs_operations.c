@@ -309,6 +309,7 @@ static int kivfs_unlink(const char *path){
 		cache_log(path, NULL, KIVFS_UNLINK);
 		unlink( full_path );
 		free( full_path );
+		cache_sync();
 		return 0;
 	}
 

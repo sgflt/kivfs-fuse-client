@@ -9,16 +9,18 @@
 #ifndef KIVFS_OPERATIONS_H_
 #define KIVFS_OPERATIONS_H_
 
+#include <kivfs.h>
+#include <pthread.h>
 
 /*---------------------------- Structures ----------------------------------*/
-extern struct fuse_operations kivfs_operations;
 
 typedef struct kivfs_ofile_st {
-	unsigned long fd;
-	unsigned long r_fd;
-	kivfs_connection_t connection;
-	int write;
-} kivfs_ofile_t;
+	unsigned long fd;				/* local file descriptor				*/
+	unsigned long r_fd;			/* remote file descriptor				*/
+	kivfs_connection_t connection;	/* connection to the fs layer			*/
+	pthread_mutex_t mutex;			/* connection can't be used parallel	*/
+	int write;						/* write flag							*/
+} kivfs_ofile_t; 					/* "opened file" type					*/
 
 /*---------------------------- CONSTANTS -----------------------------------*/
 
@@ -30,6 +32,7 @@ typedef enum {
 #define KIVFS_WRITE_CHMOD 459
 
 /*---------------------------- Variables -----------------------------------*/
+extern struct fuse_operations kivfs_operations;
 
 /*------------------- Functions: ANSI C prototypes -------------------------*/
 

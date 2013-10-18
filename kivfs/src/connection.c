@@ -276,16 +276,20 @@ int kivfs_remote_sync(const char *path, const char *new_path, KIVFS_VFS_COMMAND 
 		//case KIVFS_CHMOD:
 		//	return kivfs_remote_chmod();
 
+		case KIVFS_UNLINK:
+			return kivfs_remote_unlink( path );
+
 		default:
 			return -ENOSYS;
 	}
-
-	//TODO remove succesful action from log
-
 }
 
 // unix to kivfs :-)
 kivfs_file_mode_t mode_utok(mode_t mode){
+
+	if( mode & O_RDWR ){
+		return KIVFS_FILE_MODE_READ_WRITE;
+	}
 
 	if( mode & O_RDONLY ){
 		return KIVFS_FILE_MODE_READ;
@@ -460,6 +464,10 @@ int kivfs_remote_rmdir(const char *path){
 
 int kivfs_remote_touch(const char *path){
 	return cmd_1arg(&connection, path, KIVFS_TOUCH);
+}
+
+int kivfs_remote_unlink(const char *path){
+	return cmd_1arg(&connection, path, KIVFS_UNLINK);
 }
 
 int kivfs_remote_create(const char *path, mode_t mode, kivfs_ofile_t *file){

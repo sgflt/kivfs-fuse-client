@@ -21,9 +21,10 @@
 #define KIVFS_MOVE_RQST_FORMAT	"%s %s" 			/* source destination	*/
 #define KIVFS_STRING_FORMAT		"%s"
 #define KIVFS_OPEN_FORMAT		"%s %d"				/* path mode			*/
-#define KIVFS_FLUSH_FORMAT		"%llu"				/* fd 					*/
+#define KIVFS_ULONG_FORMAT		"%llu"
+#define KIVFS_FLUSH_FORMAT		KIVFS_ULONG_FORMAT	/* fd 					*/
 #define	 KIVFS_READ_FORMAT		"%llu %llu %llu" 	/* fd size unused		*/
-#define KIVFS_CLOSE_FORMAT		KIVFS_STRING_FORMAT	/* path 				*/
+#define KIVFS_CLOSE_FORMAT		KIVFS_ULONG_FORMAT	/* fd 				*/
 #define KIVFS_READDIR_FORMAT	KIVFS_STRING_FORMAT	/* path					*/
 #define KIVFS_FILE_INFO_FORMAT	KIVFS_STRING_FORMAT	/* path					*/
 
@@ -46,6 +47,8 @@ int kivfs_remote_open(const char *path, mode_t mode,  kivfs_ofile_t *file);
 int kivfs_remote_close(kivfs_ofile_t *file);
 int kivfs_remote_mkdir(const char *path);
 int kivfs_remote_rmdir(const char *path);
+int kivfs_remote_touch(const char *path);
+int kivfs_remote_create(const char *path, mode_t mode, kivfs_ofile_t *file);
 
 /*----------------------------- Macros -------------------------------------*/
 

@@ -32,6 +32,7 @@
  void prepare_cache_file_mode(sqlite3_stmt **stmt, sqlite3 *db);
  void prepare_cache_chmod(sqlite3_stmt **stmt, sqlite3 *db);
  void prepare_log_chmod(sqlite3_stmt **stmt, sqlite3 *db);
+ void prepare_cache_update(sqlite3_stmt **stmt, sqlite3 *db);
 
 /*----------------------------- Macros -------------------------------------*/
 

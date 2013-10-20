@@ -35,6 +35,7 @@ sqlite3_stmt *readdir_stmt;
 sqlite3_stmt *getattr_stmt;
 sqlite3_stmt *get_fmod_stmt;
 sqlite3_stmt *chmod_stmt;
+sqlite3_stmt *update_stmt;
 
 /* Each function can be processed without race condition */
 pthread_mutex_t add_mutex;
@@ -46,6 +47,7 @@ pthread_mutex_t getattr_mutex;
 pthread_mutex_t get_fmod_mutex;
 pthread_mutex_t chmod_mutex;
 pthread_mutex_t sync_mutex;
+pthread_mutex_t update_mutex;
 
 
 static inline void cache_check_stmt(void (*initializer)(sqlite3_stmt **, sqlite3 *), sqlite3_stmt **stmt){
@@ -63,6 +65,7 @@ void prepare_statements(){
 	prepare_cache_getattr		(&getattr_stmt,	db);
 	prepare_cache_file_mode	(&get_fmod_stmt,db);
 	prepare_cache_chmod		(&chmod_stmt, 	db);
+	prepare_cache_update		(&update_stmt,	db);
 }
 
 void init_mutexes(){
@@ -75,6 +78,7 @@ void init_mutexes(){
 	pthread_mutex_init(&get_fmod_mutex, 	NULL);
 	pthread_mutex_init(&chmod_mutex,		NULL);
 	pthread_mutex_init(&sync_mutex,		NULL);
+	pthread_mutex_init(&update_mutex,		NULL);
 }
 
 int cache_init(){
@@ -174,6 +178,7 @@ void cache_close(){
 	pthread_mutex_destroy( &get_fmod_mutex );
 	pthread_mutex_destroy( &chmod_mutex );
 	pthread_mutex_destroy( &sync_mutex );
+	pthread_mutex_destroy( &update_mutex );
 
 	sqlite3_finalize( add_stmt );
 	sqlite3_finalize( rename_stmt );
@@ -183,6 +188,7 @@ void cache_close(){
 	sqlite3_finalize( getattr_stmt );
 	sqlite3_finalize( get_fmod_stmt );
 	sqlite3_finalize( chmod_stmt );
+	sqlite3_finalize( update_stmt );
 
 	sqlite3_close( db );
 }
@@ -508,7 +514,7 @@ int cache_getattr(const char *path, struct stat *stbuf){
 
 		res = KIVFS_OK;
 
-		fprintf(stderr,"\033[33;1m found\n\033[0m");
+		fprintf(stderr,"\033[33;1m found\n size: %lu\n \033[0m", stbuf->st_size);
 	}
 	else{
 		res = -ENOENT;
@@ -651,4 +657,65 @@ int cache_updatedir(kivfs_list_t *files){
 	}
 
 	return KIVFS_OK;
+}
+
+int cache_update(const char *path, struct fuse_file_info *fi){
+
+	struct stat stbuf;
+	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
+
+	pthread_mutex_lock( & update_mutex );
+
+	fprintf(stderr,"\033[34;1mcache_update: %s fd: %lu\n",  path, file->fd);
+
+	if( file->fd != -1 ){
+		fstat(file->fd, &stbuf);
+		bind_text(update_stmt, ":path", path);
+		bind_int(update_stmt, ":size", stbuf.st_size);
+		bind_int(update_stmt, ":mtime", stbuf.st_mtim.tv_sec);
+		bind_int(update_stmt, ":atime", stbuf.st_atim.tv_sec);
+		bind_int(update_stmt, ":mode", stbuf.st_mode);
+		bind_int(update_stmt, ":owner", stbuf.st_uid);
+		bind_int(update_stmt, ":group", stbuf.st_gid);
+		bind_int(update_stmt, ":read_hits", 0);
+		bind_int(update_stmt, ":write_hits", 0);
+	}
+	else{
+
+		int res;
+		mode_t mode;
+		kivfs_file_t *file;
+
+		res = kivfs_remote_file_info(path, &file);
+
+		if( !res ){
+
+			mode = (file->acl->owner << 6) | (file->acl->group << 3) | (file->acl->other);
+
+			bind_text(update_stmt, ":path", path);
+			bind_int(update_stmt,	":size",		file->size);
+			bind_int(update_stmt,	":mtime",		file->mtime);
+			bind_int(update_stmt,	":atime",		file->atime);
+			bind_int(update_stmt,	":mode",	 	mode | (file->type == FILE_TYPE_DIRECTORY ? 0040000 : 0100000) );
+			bind_int(update_stmt,	":owner",		getuid());
+			bind_int(update_stmt,	":group",		getgid());
+			bind_int(update_stmt,	":read_hits",	file->read_hits);
+			bind_int(update_stmt,	":write_hits",	file->write_hits);
+		}
+
+	}
+
+
+	fprintf(stderr,"\n\033[37m%d %s %d %d\033[0m\n",sqlite3_step( update_stmt ), sqlite3_errmsg( db ), sqlite3_errcode( db ), sqlite3_changes( db ));
+
+	if( sqlite3_reset( update_stmt ) != SQLITE_OK ){
+		fprintf(stderr,"\033[31;1mcache_update: faiulure%s\033[0;0m %s %d \n",  path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+	}
+	else{
+		fprintf(stderr,"\033[35;1mCache update ok: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+	}
+
+	pthread_mutex_unlock( &update_mutex );
+
+	return 0;
 }

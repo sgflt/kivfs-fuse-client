@@ -31,6 +31,7 @@ mode_t cache_file_mode(const char *path);
 int cache_chmod(const char *path, mode_t mode);
 int cache_sync();
 int cache_updatedir(kivfs_list_t *files);
+int cache_update(const char *path, struct fuse_file_info *fi);
 
 /*----------------------------- Macros -------------------------------------*/
 

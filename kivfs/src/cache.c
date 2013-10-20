@@ -173,6 +173,7 @@ void cache_close(){
 	pthread_mutex_destroy( &getattr_mutex );
 	pthread_mutex_destroy( &get_fmod_mutex );
 	pthread_mutex_destroy( &chmod_mutex );
+	pthread_mutex_destroy( &sync_mutex );
 
 	sqlite3_finalize( add_stmt );
 	sqlite3_finalize( rename_stmt );
@@ -193,7 +194,7 @@ int cache_add(const char *path, kivfs_file_t *file){
 
 
 	if( file ){
-		char tmp[4096];
+		char tmp[4096]; //XXX: unsafe
 		mode_t mode;
 
 		memset(tmp, 0, 4096);
@@ -553,30 +554,62 @@ mode_t cache_file_mode(const char *path ){
 	return -ENOENT;
 }
 
+void cache_log_delete(const char *path, KIVFS_VFS_COMMAND action){
+	sqlite3_stmt *delete_log_stmt;
+	sqlite3_prepare_v2(db, "DELETE FROM log WHERE action=:action AND path LIKE :path", ZERO_TERMINATED, &delete_log_stmt, NULL);
+
+	bind_text(delete_log_stmt,":path", path);
+	bind_int(delete_log_stmt,":action", action);
+
+	sqlite3_step( delete_log_stmt );
+	sqlite3_reset( delete_log_stmt );
+	sqlite3_finalize( delete_log_stmt );
+}
+
 int cache_sync(){
 
 	sqlite3_stmt *stmt;
-	sqlite3_stmt *delete_log_stmt;
 	sqlite3_prepare_v2(db, "SELECT * FROM log", ZERO_TERMINATED, &stmt, NULL);
-	sqlite3_prepare_v2(db, "DELETE FROM log WHERE action=:action AND path LIKE :path", ZERO_TERMINATED, &delete_log_stmt, NULL);
 
 	pthread_mutex_lock( &sync_mutex );
 
 	while( sqlite3_step( stmt ) == SQLITE_ROW ){
-			const char *path 			= (const char *)sqlite3_column_text(stmt, 0);
-			const char *new_path		= (const char *)sqlite3_column_text(stmt ,1);
-			KIVFS_VFS_COMMAND action 	= sqlite3_column_int(stmt, 2);
+		int res;
+		const char *path 			= (const char *)sqlite3_column_text(stmt, 0);
+		const char *new_path		= (const char *)sqlite3_column_text(stmt ,1);
+		KIVFS_VFS_COMMAND action 	= sqlite3_column_int(stmt, 2);
 
-			if( !kivfs_remote_sync(path, new_path, action) ){
-				bind_text(delete_log_stmt,":path", path);
-				bind_int(delete_log_stmt,":action", action);
+		res = kivfs_remote_sync(path, new_path, action);
 
-				sqlite3_step( delete_log_stmt );
-				sqlite3_reset( delete_log_stmt );
+		/* Action was succesful on server side */
+		if( !res ){
+			cache_log_delete(path, action);
+		}
+		else{
+			int stop = 0;
+
+			/* Action failed, but why? */
+			switch( res ){
+				case KIVFS_ERC_FILE_LOCKED:
+					/* File is locked so we can't delete entry from log */
+					break;
+
+				case KIVFS_ERC_NO_SUCH_FILE:
+					/* File doesn't exist and entry in log is just wrong */
+					cache_log_delete(path, action);
+					break;
+
+
+				default:
+					/* Some serious error like no internet connection */
+					stop = 1;
+					break;
 			}
-			else{
-				//break;
+
+			if( stop ){
+				break;
 			}
+		}
 	}
 
 	pthread_mutex_unlock( &sync_mutex );

@@ -121,26 +121,47 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi){
 static int kivfs_read(const char *path, char *buf, size_t size,
 		off_t offset, struct fuse_file_info *fi){
 
-		size = pread(((kivfs_ofile_t *)fi->fh)->fd, buf, size, offset);
+	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
-		if( size == -1 ){
-			size = -errno;
+	size = pread(((kivfs_ofile_t *)fi->fh)->fd, buf, size, offset);
+
+	if( size == -1 ){
+		int r_size;
+		size = -errno;
+
+		if( file->r_fd ){
+			r_size = kivfs_remote_read(file, buf, size, offset);
 		}
+	}
 
-		return size;
+	return size;
 }
 
 static int kivfs_write(const char *path, const char *buf, size_t size,
 		off_t offset, struct fuse_file_info *fi){
 
-	size = pwrite(((kivfs_ofile_t *)fi->fh)->fd, buf, size, offset);
+	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
+
+	size = pwrite(file->fd, buf, size, offset);
 
 	if( size == -1 ){
+
 		size = -errno;
 	}
-	else{
-		((kivfs_ofile_t *)fi->fh)->write = 1;
+
+	fprintf("kivfs_write: r_fd: %llu\n", file->r_fd);
+	if( file->r_fd ){
+		int r_size;
+		r_size = kivfs_remote_write(file, buf, size, offset);
+		/* log write if remote fail */
+		if( r_size <= 0){
+			file->write = 1;
+		}
+		else{
+			size = r_size;
+		}
 	}
+
 
 	return size;
 }

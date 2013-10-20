@@ -57,7 +57,19 @@ static int kivfs_getattr(const char *path, struct stat *stbuf){
 }
 
 static int kivfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi){
-	return fstat(((kivfs_ofile_t *)fi->fh)->fd, stbuf);
+
+	int res;
+	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
+
+	if( file->fd != -1 ){
+		fprintf(stderr,"\033[31;1m fgetarr fail %lu\n\033[0m", file->fd);
+		res = fstat(file->fd, stbuf);
+	}
+	else if( file->r_fd ){
+		res = cache_getattr(path, stbuf);
+	}
+
+	return res;
 }
 
 static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
@@ -121,15 +133,24 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi){
 static int kivfs_read(const char *path, char *buf, size_t size,
 		off_t offset, struct fuse_file_info *fi){
 
+	size_t local_size;
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
-	size = pread(((kivfs_ofile_t *)fi->fh)->fd, buf, size, offset);
+	local_size = pread(((kivfs_ofile_t *)fi->fh)->fd, buf, size, offset);
 
-	if( size == -1 ){
+	if( local_size == -1 ){
 		int r_size;
-		size = -errno;
+		struct stat stbuf;
 
+		cache_getattr(path, &stbuf);
+		//size = -errno;
+		printf("kivfs_read: r_fd: %lu size: %lu\n", file->r_fd, size);
 		if( file->r_fd ){
+
+			if( size + offset > stbuf.st_size ){
+				size = stbuf.st_size - offset;
+			}
+
 			r_size = kivfs_remote_read(file, buf, size, offset);
 		}
 	}
@@ -140,18 +161,20 @@ static int kivfs_read(const char *path, char *buf, size_t size,
 static int kivfs_write(const char *path, const char *buf, size_t size,
 		off_t offset, struct fuse_file_info *fi){
 
+	size_t local_size;
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
-	size = pwrite(file->fd, buf, size, offset);
+	local_size = pwrite(file->fd, buf, size, offset);
 
-	if( size == -1 ){
+	if( local_size == -1 ){
 
-		size = -errno;
+		//size = -errno;
 	}
 
-	fprintf("kivfs_write: r_fd: %llu\n", file->r_fd);
+	printf("kivfs_write: r_fd: %lu\n", file->r_fd);
 	if( file->r_fd ){
 		int r_size;
+
 		r_size = kivfs_remote_write(file, buf, size, offset);
 		/* log write if remote fail */
 		if( r_size <= 0){
@@ -249,8 +272,11 @@ static int kivfs_release(const char *path, struct fuse_file_info *fi){
 		}
 	}
 
+	//TODO BIGFILE
 	if( file->write ){
 		cache_log(path, NULL, KIVFS_WRITE);
+		cache_sync();
+		cache_update( fi );
 	}
 
 	free( file );
@@ -262,22 +288,24 @@ static int kivfs_truncate(const char *path, off_t size){
 	int res;
 	char *full_path = get_full_path( path );
 
-	res = truncate(full_path, size);
+	truncate(full_path, size);
 	free( full_path );
 
-	if( res == -1 ){
-		return -errno;
-	}
+	/*if( res == -1 ){
+		//XXX: remote return -errno;
+	}*/
 
 	/* Write will also truncate */
 	cache_log(path, NULL, KIVFS_WRITE);
 
-	return res;
+	return 0;
 }
 
 static int kivfs_ftruncate(const char *path, off_t size, struct fuse_file_info *fi){
 
-	if( ftruncate(((kivfs_ofile_t *)fi->fh)->fd, size) ){
+	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
+
+	if( file->fd != -1 && ftruncate(file->fd, size) ){
 		return -errno;
 	}
 

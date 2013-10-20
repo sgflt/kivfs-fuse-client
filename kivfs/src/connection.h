@@ -54,6 +54,7 @@ int kivfs_remote_create(const char *path, mode_t mode, kivfs_ofile_t *file);
 int kivfs_remote_unlink(const char *path);
 int kivfs_remote_read( kivfs_ofile_t *file, char *buf, size_t size, off_t offset);
 int kivfs_remote_write(kivfs_ofile_t *file, const char *buf, size_t size, off_t offset);
+int kivfs_remote_file_info(const char * path, kivfs_file_t **file);
 
 /*----------------------------- Macros -------------------------------------*/
 

@@ -176,13 +176,10 @@ static int kivfs_write(const char *path, const char *buf, size_t size,
 		int r_size;
 
 		r_size = kivfs_remote_write(file, buf, size, offset);
-		/* log write if remote fail */
-		if( r_size <= 0){
-			file->write = 1;
-		}
-		else{
-			size = r_size;
-		}
+
+
+		file->write = 1;
+		size = r_size;
 	}
 
 
@@ -274,9 +271,9 @@ static int kivfs_release(const char *path, struct fuse_file_info *fi){
 
 	//TODO BIGFILE
 	if( file->write ){
-		cache_log(path, NULL, KIVFS_WRITE);
-		cache_sync();
-		cache_update( fi );
+		//cache_log(path, NULL, KIVFS_WRITE);
+		//cache_sync();
+		cache_update(path, fi);
 	}
 
 	free( file );

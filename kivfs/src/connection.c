@@ -210,7 +210,12 @@ int kivfs_get_to_cache(const char *path){
 			for(ssize_t bytes_received = 0LL;
 					bytes_received < file_info->size;
 					bytes_received += bytes_received_now){
-				bytes_received_now = read(file.connection.socket, buf, 1);
+				if( file_info->size - bytes_received < BUFFER_1K){
+					bytes_received_now = read(file.connection.socket, buf, BUFFER_1K);
+				}
+				else{
+					bytes_received_now = read(file.connection.socket, buf, file_info->size - bytes_received);
+				}
 
 				if( bytes_received_now == -1 ){
 					fclose( cache_file );

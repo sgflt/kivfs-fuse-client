@@ -33,6 +33,11 @@ char * get_cache_path(){
 	return cache_path;
 }
 
+size_t get_cache_size()
+{
+	return 128*1024*1024;
+}
+
 /*----------------------------------------------------------------------------
    Function : get_full_path(const char *path)
    In       : Path in mounted directory.

@@ -21,6 +21,7 @@
 kivfs_server_t *get_server();
 char * get_cache_path();
 char * get_full_path(const char *path);
+size_t get_cache_size();
 /*----------------------------- Macros -------------------------------------*/
 
 

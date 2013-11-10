@@ -36,6 +36,10 @@ sqlite3_stmt *getattr_stmt;
 sqlite3_stmt *get_fmod_stmt;
 sqlite3_stmt *chmod_stmt;
 sqlite3_stmt *update_stmt;
+sqlite3_stmt *get_version_stmt;
+sqlite3_stmt *update_read_hits_stmt;
+sqlite3_stmt *update_write_hits_stmt;
+
 
 /* Each function can be processed without race condition */
 pthread_mutex_t add_mutex;
@@ -48,6 +52,9 @@ pthread_mutex_t get_fmod_mutex;
 pthread_mutex_t chmod_mutex;
 pthread_mutex_t sync_mutex;
 pthread_mutex_t update_mutex;
+pthread_mutex_t get_version_mutex;
+
+
 
 
 static inline void cache_check_stmt(void (*initializer)(sqlite3_stmt **, sqlite3 *), sqlite3_stmt **stmt){
@@ -57,15 +64,18 @@ static inline void cache_check_stmt(void (*initializer)(sqlite3_stmt **, sqlite3
 }
 
 void prepare_statements(){
-	prepare_cache_add			(&add_stmt,		db);
-	prepare_cache_rename		(&rename_stmt,	db);
-	prepare_cache_remove		(&remove_stmt,	db);
-	prepare_cache_log			(&log_stmt,		db);
-	prepare_cache_readdir		(&readdir_stmt, db);
-	prepare_cache_getattr		(&getattr_stmt,	db);
-	prepare_cache_file_mode	(&get_fmod_stmt,db);
-	prepare_cache_chmod		(&chmod_stmt, 	db);
-	prepare_cache_update		(&update_stmt,	db);
+	prepare_cache_add				(&add_stmt,		db);
+	prepare_cache_rename			(&rename_stmt,	db);
+	prepare_cache_remove			(&remove_stmt,	db);
+	prepare_cache_log				(&log_stmt,		db);
+	prepare_cache_readdir			(&readdir_stmt, db);
+	prepare_cache_getattr			(&getattr_stmt,	db);
+	prepare_cache_file_mode		(&get_fmod_stmt,db);
+	prepare_cache_chmod			(&chmod_stmt, 	db);
+	prepare_cache_update			(&update_stmt,	db);
+	prepare_cache_get_version	(&get_version_stmt,	db);
+	prepare_cache_update_read_hits(&update_read_hits_stmt, db);
+	prepare_cache_update_write_hits(&update_write_hits_stmt, db);
 }
 
 void init_mutexes(){
@@ -79,6 +89,7 @@ void init_mutexes(){
 	pthread_mutex_init(&chmod_mutex,		NULL);
 	pthread_mutex_init(&sync_mutex,		NULL);
 	pthread_mutex_init(&update_mutex,		NULL);
+	pthread_mutex_init(&get_version_mutex,NULL);
 }
 
 int cache_init(){
@@ -179,6 +190,7 @@ void cache_close(){
 	pthread_mutex_destroy( &chmod_mutex );
 	pthread_mutex_destroy( &sync_mutex );
 	pthread_mutex_destroy( &update_mutex );
+	pthread_mutex_destroy( &get_version_mutex );
 
 	sqlite3_finalize( add_stmt );
 	sqlite3_finalize( rename_stmt );
@@ -189,6 +201,9 @@ void cache_close(){
 	sqlite3_finalize( get_fmod_stmt );
 	sqlite3_finalize( chmod_stmt );
 	sqlite3_finalize( update_stmt );
+	sqlite3_finalize( get_version_stmt );
+	sqlite3_finalize( update_read_hits_stmt );
+	sqlite3_finalize( update_write_hits_stmt );
 
 	sqlite3_close( db );
 }
@@ -227,13 +242,16 @@ int cache_add(const char *path, kivfs_file_t *file){
 
 		fprintf(stderr," %d %d %d %o\n"
 				"file type: %d\n"
-				"path: %s",
+				"path: %s\n"
+				"version: %llu\n",
 				file->acl->owner,
 				file->acl->group,
 				file->acl->other,
 				(file->acl->owner << 9) | (file->acl->group << 6) | (file->acl->other),
 				file->type,
-				tmp
+				tmp,
+				file->version
+
 			);
 
 	}
@@ -258,7 +276,7 @@ int cache_add(const char *path, kivfs_file_t *file){
 		bind_int(add_stmt, ":read_hits", 0);
 		bind_int(add_stmt, ":write_hits", 0);
 		//bind_int(add_stmt, ":type", type);
-		bind_int(add_stmt, ":version", 0);
+		bind_int(add_stmt, ":version", 2);
 
 		printf("\n\033[33;1m\tmode: %c%c%c %c%c%c %c%c%c  %o %o \033[0;0m\n",
 									stbuf.st_mode & S_IRUSR ? 'r' : '-',
@@ -492,7 +510,8 @@ int cache_readdir(const char *path, void *buf, fuse_fill_dir_t filler){
 	return -ENOENT;
 }
 
-int cache_getattr(const char *path, struct stat *stbuf){
+int cache_getattr(const char *path, struct stat *stbuf)
+{
 
 	int res;
 
@@ -502,7 +521,8 @@ int cache_getattr(const char *path, struct stat *stbuf){
 
 
 	//should be ROW
-	if( sqlite3_step( getattr_stmt ) == SQLITE_ROW ){
+	if ( sqlite3_step( getattr_stmt ) == SQLITE_ROW )
+	{
 
 		stbuf->st_atim.tv_sec = sqlite3_column_int(getattr_stmt, 0);
 		stbuf->st_mtim.tv_sec = sqlite3_column_int(getattr_stmt, 1);
@@ -516,14 +536,17 @@ int cache_getattr(const char *path, struct stat *stbuf){
 
 		fprintf(stderr,"\033[33;1m found\n size: %lu\n \033[0m", stbuf->st_size);
 	}
-	else{
+	else
+	{
 		res = -ENOENT;
 	}
 
-	if( sqlite3_reset( getattr_stmt ) == SQLITE_OK ){
+	if ( sqlite3_reset( getattr_stmt ) == SQLITE_OK )
+	{
 		fprintf(stderr,"\033[31;1mCache getattr reset OK: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
-	else{
+	else
+	{
 		fprintf(stderr,"\033[31;1mCache getattr failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 
@@ -535,24 +558,54 @@ int cache_getattr(const char *path, struct stat *stbuf){
 
 }
 
-//rename to get_file_mode
-mode_t cache_file_mode(const char *path ){
+kivfs_version_t cache_get_version(const char *path)
+{
+	kivfs_version_t version = -1;
 
+	pthread_mutex_lock( &get_version_mutex );
+
+	bind_text(get_version_stmt, ":path", path);
+
+	if( sqlite3_step( get_version_stmt ) == SQLITE_ROW )
+	{
+		version = sqlite3_column_int(get_version_stmt, 0);
+	}
+
+	if( sqlite3_reset( get_version_stmt ) == SQLITE_OK )
+	{
+		pthread_mutex_unlock( &get_version_mutex );
+		return version;
+	}
+	else
+	{
+		fprintf(stderr,"\033[31;1mCache readdir failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+	}
+	pthread_mutex_unlock( &get_version_mutex );
+
+	return version;
+}
+
+//rename to get_file_mode
+mode_t cache_file_mode(const char *path )
+{
 	mode_t mode;
 
 	pthread_mutex_lock( &get_fmod_mutex );
 
 	bind_text(get_fmod_stmt, ":path", path);
 
-	if( sqlite3_step( get_fmod_stmt ) == SQLITE_ROW ){
+	if( sqlite3_step( get_fmod_stmt ) == SQLITE_ROW )
+	{
 		mode = sqlite3_column_int(get_fmod_stmt, 0);
 	}
 
-	if( sqlite3_reset( get_fmod_stmt ) == SQLITE_OK ){
+	if( sqlite3_reset( get_fmod_stmt ) == SQLITE_OK )
+	{
 		pthread_mutex_unlock( &get_fmod_mutex );
 		return mode;
 	}
-	else{
+	else
+	{
 		fprintf(stderr,"\033[31;1mCache readdir failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 
@@ -560,7 +613,8 @@ mode_t cache_file_mode(const char *path ){
 	return -ENOENT;
 }
 
-void cache_log_delete(const char *path, KIVFS_VFS_COMMAND action){
+void cache_log_delete(const char *path, KIVFS_VFS_COMMAND action)
+{
 	sqlite3_stmt *delete_log_stmt;
 	sqlite3_prepare_v2(db, "DELETE FROM log WHERE action=:action AND path LIKE :path", ZERO_TERMINATED, &delete_log_stmt, NULL);
 
@@ -572,14 +626,16 @@ void cache_log_delete(const char *path, KIVFS_VFS_COMMAND action){
 	sqlite3_finalize( delete_log_stmt );
 }
 
-int cache_sync(){
+int cache_sync()
+{
 
 	sqlite3_stmt *stmt;
 	sqlite3_prepare_v2(db, "SELECT * FROM log", ZERO_TERMINATED, &stmt, NULL);
 
 	pthread_mutex_lock( &sync_mutex );
 
-	while( sqlite3_step( stmt ) == SQLITE_ROW ){
+	while ( sqlite3_step( stmt ) == SQLITE_ROW )
+	{
 		int res;
 		const char *path 			= (const char *)sqlite3_column_text(stmt, 0);
 		const char *new_path		= (const char *)sqlite3_column_text(stmt ,1);
@@ -588,14 +644,16 @@ int cache_sync(){
 		res = kivfs_remote_sync(path, new_path, action);
 
 		/* Action was succesful on server side */
-		if( !res ){
+		if ( !res ){
 			cache_log_delete(path, action);
 		}
-		else{
+		else
+		{
 			int stop = 0;
 
 			/* Action failed, but why? */
-			switch( res ){
+			switch ( res )
+			{
 				case KIVFS_ERC_FILE_LOCKED:
 					/* File is locked so we can't delete entry from log */
 					break;
@@ -612,7 +670,8 @@ int cache_sync(){
 					break;
 			}
 
-			if( stop ){
+			if ( stop )
+			{
 				break;
 			}
 		}
@@ -623,7 +682,8 @@ int cache_sync(){
 	return 0; //XXX
 }
 
-int cache_chmod(const char *path, mode_t mode){
+int cache_chmod(const char *path, mode_t mode)
+{
 
 	pthread_mutex_lock( &chmod_mutex );
 
@@ -632,11 +692,13 @@ int cache_chmod(const char *path, mode_t mode){
 
 	sqlite3_step( chmod_stmt );
 
-	if( sqlite3_reset( readdir_stmt ) == SQLITE_OK ){
+	if( sqlite3_reset( readdir_stmt ) == SQLITE_OK )
+	{
 			pthread_mutex_unlock( &chmod_mutex );
 			return KIVFS_OK;
 	}
-	else{
+	else
+	{
 		fprintf(stderr,"\033[31;1mCache readdir failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 
@@ -645,13 +707,15 @@ int cache_chmod(const char *path, mode_t mode){
 	return -EPERM;
 }
 
-int cache_updatedir(kivfs_list_t *files){
+int cache_updatedir(kivfs_list_t *files)
+{
 
 	for(kivfs_adt_item_t *item = files->first; item != NULL; item = item->next){
 
 		kivfs_file_t *file = (kivfs_file_t *)(item->data);
 
-		if( !cache_add(NULL, file) ){
+		if( !cache_add(NULL, file) )
+		{
 			return KIVFS_ERROR;
 		}
 	}
@@ -659,7 +723,8 @@ int cache_updatedir(kivfs_list_t *files){
 	return KIVFS_OK;
 }
 
-int cache_update(const char *path, struct fuse_file_info *fi){
+int cache_update(const char *path, struct fuse_file_info *fi, kivfs_file_t *file_info)
+{
 
 	struct stat stbuf;
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
@@ -668,54 +733,65 @@ int cache_update(const char *path, struct fuse_file_info *fi){
 
 	fprintf(stderr,"\033[34;1mcache_update: %s fd: %lu\n",  path, file->fd);
 
-	if( file->fd != -1 ){
+	/* update from local file */
+	if( file_info == NULL )
+	{
 		fstat(file->fd, &stbuf);
-		bind_text(update_stmt, ":path", path);
-		bind_int(update_stmt, ":size", stbuf.st_size);
-		bind_int(update_stmt, ":mtime", stbuf.st_mtim.tv_sec);
-		bind_int(update_stmt, ":atime", stbuf.st_atim.tv_sec);
-		bind_int(update_stmt, ":mode", stbuf.st_mode);
-		bind_int(update_stmt, ":owner", stbuf.st_uid);
-		bind_int(update_stmt, ":group", stbuf.st_gid);
-		bind_int(update_stmt, ":read_hits", 0);
-		bind_int(update_stmt, ":write_hits", 0);
+		bind_text(update_stmt,	":path",	path);
+		bind_int(update_stmt,	":size",	stbuf.st_size);
+		bind_int(update_stmt,	":mtime",	stbuf.st_mtim.tv_sec);
+		bind_int(update_stmt,	":atime",	stbuf.st_atim.tv_sec);
+
+		fprintf(stderr, "UPDATE FROM CACHE size %lu\n", stbuf.st_size);
 	}
-	else{
-
-		int res;
+	else
+	{
 		mode_t mode;
-		kivfs_file_t *file;
 
-		res = kivfs_remote_file_info(path, &file);
+		fprintf(stderr, "REMOTE UPDATE %p\n", file_info);
 
-		if( !res ){
+		mode = (file_info->acl->owner << 6) | (file_info->acl->group << 3) | (file_info->acl->other);
 
-			mode = (file->acl->owner << 6) | (file->acl->group << 3) | (file->acl->other);
-
-			bind_text(update_stmt, ":path", path);
-			bind_int(update_stmt,	":size",		file->size);
-			bind_int(update_stmt,	":mtime",		file->mtime);
-			bind_int(update_stmt,	":atime",		file->atime);
-			bind_int(update_stmt,	":mode",	 	mode | (file->type == FILE_TYPE_DIRECTORY ? 0040000 : 0100000) );
-			bind_int(update_stmt,	":owner",		getuid());
-			bind_int(update_stmt,	":group",		getgid());
-			bind_int(update_stmt,	":read_hits",	file->read_hits);
-			bind_int(update_stmt,	":write_hits",	file->write_hits);
-		}
+		bind_text(update_stmt, ":path", 		path);
+		bind_int(update_stmt,	":size",		file_info->size);
+		bind_int(update_stmt,	":mtime",		file_info->mtime);
+		bind_int(update_stmt,	":atime",		file_info->atime);
+		bind_int(update_stmt,	":mode",		mode);
 
 	}
 
 
 	fprintf(stderr,"\n\033[37m%d %s %d %d\033[0m\n",sqlite3_step( update_stmt ), sqlite3_errmsg( db ), sqlite3_errcode( db ), sqlite3_changes( db ));
 
-	if( sqlite3_reset( update_stmt ) != SQLITE_OK ){
+	if( sqlite3_reset( update_stmt ) != SQLITE_OK )
+	{
 		fprintf(stderr,"\033[31;1mcache_update: faiulure%s\033[0;0m %s %d \n",  path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
-	else{
+	else
+	{
 		fprintf(stderr,"\033[35;1mCache update ok: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 
 	pthread_mutex_unlock( &update_mutex );
 
 	return 0;
+}
+
+void cache_update_read_hits(const char *path )
+{
+
+}
+
+void cache_update_write_hits(const char *path )
+{
+	sqlite3_step( update_write_hits_stmt );
+
+	if( sqlite3_reset( update_stmt ) != SQLITE_OK )
+	{
+		fprintf(stderr,"\033[31;1mcache_update: faiulure%s\033[0;0m %s %d \n",  path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+	}
+	else
+	{
+		fprintf(stderr,"\033[35;1mCache update ok: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+	}
 }

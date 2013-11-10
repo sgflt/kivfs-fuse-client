@@ -7,6 +7,7 @@
  ---------------------------------------------------------------------------*/
 #include <fuse.h>
 #include <kivfs.h>
+#include <stdint.h>
 
 #include "kivfs_operations.h"
 #include "connection.h"
@@ -89,8 +90,8 @@ int kivfs_login(const char *username, const char *password){
 
 
 int kivfs_session_init(){
-//147.228.63.46		147.228.63.47	 147.228.63.48
-	kivfs_set_connection(&connection, "147.228.63.46", 30003);
+//147.228.63.46		147.228.63.47	 147.228.63.48 147.228.67.121
+	kivfs_set_connection(&connection, "192.168.2.14", 30003);
 	kivfs_print_connection( &connection );
 
 	kivfs_connect(&connection, 1);
@@ -223,6 +224,106 @@ int kivfs_get_to_cache(const char *path){
 		}
 	}
 
+	//kivfs_disconnect(file.connection.socket);
+	kivfs_free_msg( response );
+	return res;
+}
+
+
+int kivfs_put_from_cache(const char *path){
+//TODO
+	int res;
+	kivfs_msg_t *response;
+	kivfs_ofile_t file;
+	kivfs_file_t *file_info;
+
+
+	res = kivfs_remote_file_info(path, &file_info);
+	fprintf(stderr,"\033[33;1mUploading whole file %s %llu\033[0m\n", path, file_info->size);
+
+	if( res ){
+		fprintf(stderr,"\033[34;1mFile info"
+				" failed %s\033[0m\n", path);
+		return res;
+	}
+
+
+	res = kivfs_remote_open(path, KIVFS_FILE_MODE_WRITE, &file);
+
+	if( res ){
+		fprintf(stderr,"\033[31;1mFile open failed %s\033[0m\n", path);
+		return res;
+	}
+
+	//kivfs_connect(&file.connection, 1);
+
+	res = kivfs_send_and_receive(
+			&file.connection,
+			kivfs_request(
+				sessid,
+				KIVFS_WRITE,
+				KIVFS_WRITE_FORMAT,
+				file.r_fd,
+				file_info->size,
+				0
+				),
+			&response
+			);
+
+	if( !res ){
+
+		res = response->head->return_code;
+
+		/* Check to errors on server side */
+		if( !res ){
+			char buf[BUFFER_128K];
+			ssize_t bytes_sent_now;
+			struct stat stbuf;
+			char *full_path = get_full_path( path );
+			FILE *cache_file = fopen(full_path, "rb");
+
+			fprintf(stderr,"%s\n", full_path);
+			stat(full_path, &stbuf);
+			free( full_path );
+
+			/*if( !cache_file ){
+				res = kivfs_remote_close( &file );
+
+				if( res ){
+					fprintf(stderr,"\033[31;1mFile close failed %s\033[0m\n", path);
+					return res;
+				}
+				return -errno;
+			}*/
+
+			fprintf(stderr,"FOR::0 -> %lu\n", stbuf.st_size);
+			for (ssize_t bytes_sent = 0L; bytes_sent < stbuf.st_size; bytes_sent += bytes_sent_now) {
+				size_t in_buffer_size = fread(buf, sizeof(char), BUFFER_128K, cache_file);
+
+				bytes_sent_now = kivfs_send_data(file.connection.socket, (void *)buf, in_buffer_size);
+				fprintf(stderr, "Sent: %ld B\nSent total: %ld\n Buff: %lu\n", bytes_sent_now, bytes_sent, in_buffer_size);
+
+				if( bytes_sent_now <= 0 ){
+					perror("WRIET");
+					break;
+				}
+			}
+
+			fclose( cache_file );
+		}
+	}
+
+
+	kivfs_free_msg( response );
+	kivfs_recv_from(&file.connection, &response);
+
+
+	res = kivfs_remote_close( &file );
+
+	if( res ){
+		fprintf(stderr,"\033[31;1mFile close failed %s\033[0m\n", path);
+		return res;
+	}
 	//kivfs_disconnect(file.connection.socket);
 	kivfs_free_msg( response );
 	return res;
@@ -402,7 +503,7 @@ int kivfs_remote_close(kivfs_ofile_t *file){
 	int res;
 	kivfs_msg_t *response;
 
-	kivfs_remote_flush( file );
+	//XXX kivfs_remote_flush( file );
 
 
 	/* Send CLOSE request */
@@ -464,7 +565,8 @@ int kivfs_remote_read( kivfs_ofile_t *file, char *buf, size_t size,
 		if( !res ){
 			fprintf(stderr, "\033[35;1m read request remote OK; size %ld\n\033[0m", size);
 
-			if( kivfs_recv_data(file->connection.socket, buf, size) <= 0){
+			res = kivfs_recv_data(file->connection.socket, buf, size);
+			if( res <= 0 ){
 				fprintf(stderr, "\033[33;1m read request receiced FAILED \n\033[0m");
 			}
 
@@ -558,14 +660,15 @@ int kivfs_remote_write(kivfs_ofile_t *file, const char *buf, size_t size,
 
 	int res;
 	kivfs_msg_t *response;
+	ssize_t bytes_sent;
 
-	res = kivfs_remote_fseek(file, offset);
+	/*XXXres = kivfs_remote_fseek(file, offset);
 
 	if( res ){
 		return res;
-	}
+	}*/
 
-	fprintf(stderr,"file: %p r_fd: %lu\n mutex: %llu size:\n %lu\n", file, file->r_fd, file->mutex, size);
+	fprintf(stderr,"file: %p r_fd: %lu\n size: %lu\n", file, file->r_fd, size);
 	pthread_mutex_lock( &file->mutex );
 
 	/* Send WRITE request */
@@ -587,17 +690,15 @@ int kivfs_remote_write(kivfs_ofile_t *file, const char *buf, size_t size,
 
 		/* Check to errors on server side */
 		if( !res ){
-			res = kivfs_send_data(file->connection.socket,(void *)buf, size);
+			bytes_sent = kivfs_send_data(file->connection.socket,(void *)buf, size);
 
-			if( !res ){
+			if( bytes_sent >= 0 ){
 				kivfs_free_msg( response );
 				res = kivfs_recv_from(&file->connection, &response);
 
-				if( res && response->head->return_code != size ){
-					res = KIVFS_ERC_TRANSFER_ERROR;
-				}
-				else{
-					res = KIVFS_OK;
+				if( !res ){
+					fprintf(stderr,"\033[31;1m File write result: %d | rc: %d\n",res, response->head->return_code);
+					res =  response->head->return_code;
 				}
 			}
 		}
@@ -605,15 +706,14 @@ int kivfs_remote_write(kivfs_ofile_t *file, const char *buf, size_t size,
 
 
 
-	if( res > 0){
-		fprintf(stderr, "\033[35;1mFile write OK %d\033[37;1m%lu \033[0m\n", res);
+	if( res >= 0){
+		fprintf(stderr, "\033[35;1mFile write OK rc: %d | size: %ld \033[0m\n", res, bytes_sent);
 	}
 	else{
-		fprintf(stderr, "\033[31;1mFile write FAIL \033[0m\n");
+		fprintf(stderr, "\033[31;1mFile write FAIL %d | size: %ld \033[0m\n", res, bytes_sent);
 	}
-
 	pthread_mutex_unlock( &file->mutex );
 
 	kivfs_free_msg( response );
-	return res;
+	return res ? res : bytes_sent;
 }

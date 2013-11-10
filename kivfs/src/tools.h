@@ -19,6 +19,7 @@
 /*------------------- Functions: ANSI C prototypes -------------------------*/
 
 int mkdirs(const char *path);
+void print_open_mode(int mode);
 
 /*----------------------------- Macros -------------------------------------*/
 

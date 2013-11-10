@@ -62,7 +62,7 @@ static int kivfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
 	if( file->fd != -1 ){
-		fprintf(stderr,"\033[31;1m fgetarr fail %lu\n\033[0m", file->fd);
+		fprintf(stderr,"\033[31;1m fgetarr %lu\n\033[0m", file->fd);
 		res = fstat(file->fd, stbuf);
 	}
 	else if( file->r_fd ){
@@ -73,21 +73,22 @@ static int kivfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file
 }
 
 static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-		 off_t offset, struct fuse_file_info *fi){
-
+		 off_t offset, struct fuse_file_info *fi)
+{
 		kivfs_list_t *files;
 
 		filler(buf, ".", NULL, 0);
 		filler(buf, "..", NULL, 0);
 
-		if( !kivfs_remote_readdir(path, &files) ){
-			for(kivfs_adt_item_t *item = files->first; item != NULL; item = item->next){
-
-
+		if ( !kivfs_remote_readdir(path, &files) )
+		{
+			for (kivfs_adt_item_t *item = files->first; item != NULL; item = item->next)
+			{
 				cache_add(path, item->data);
 			}
 		}
-		else{
+		else
+		{
 			fprintf(stderr, "\033[33;1mkivfs remote readdir error");
 		}
 
@@ -99,46 +100,156 @@ static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		return cache_readdir(path, buf, filler);
 }
 
-static int kivfs_open(const char *path, struct fuse_file_info *fi){
-
-	int res = 0;
+static int kivfs_open(const char *path, struct fuse_file_info *fi)
+{
 	kivfs_ofile_t *file;
 	char *full_path = get_full_path( path );
 
-
-
-	//TODO: check version
 	file = (kivfs_ofile_t *)malloc( sizeof( kivfs_ofile_t ) );
 
-	if( !file ){
-		return -ENOMEM;
+	if ( !file )
+	{
+		return -errno;
 	}
 
 	fi->fh = (unsigned long)file;
 	memset(file, 0, sizeof(kivfs_ofile_t));
 
-	file->fd = open(full_path , fi->flags);
+	print_open_mode( fi->flags );
 
-	if( file->fd == -1 ){
-		//res = -errno;
+	/* If WRONLY, don't check version, because file will be truncated anyway */
+	if ( fi->flags & O_WRONLY )
+	{
+		kivfs_remote_open(path, fi->flags, file);
 
-		res = kivfs_remote_open(path, fi->flags, file);
+		file->fd = open(full_path , fi->flags | (access(full_path, F_OK) != 0 ? O_CREAT : 0), S_IRUSR | S_IWUSR ); /* Open if exists, or create in cache */
+
+		if ( file->fd == -1 )
+		{
+			fprintf(stderr, "\033[33;1mkivfs_open: LOCAL OPEN FAILED\033[0m\n");
+		}
+		else
+		{
+			fprintf(stderr, "\033[34;1mkivfs_open: LOCAL OPEN OK\033[0m\n");
+		}
+		cache_update_write_hits( path );
+	}
+
+	/* READ_ONLY or RDWR */
+	else
+	{
+		int res;
+		kivfs_file_t *file_info = NULL;
+
+		res = kivfs_remote_file_info(path, &file_info);
+
+		/* Some error on server side occured */
+		if ( res )
+		{
+			//XXX: handle error and remove deleted file from db
+			fprintf(stderr, "\033[34;1mkivfs_open: REMOTE FILE INFO, abort open %d\033[0m\n", res);
+			return res;
+		}
+
+		fprintf(stderr, "remote version: %llu, local version: %d\n", file_info->version, cache_get_version( path ));
+
+		/* if local file is older than remote or doesn't exist */
+		if ( file_info->version != cache_get_version( path ) || access(full_path, F_OK) != 0 )
+		{
+			fprintf(stderr, "Remote file is newer, local will be replaced.\n");
+
+
+			res = kivfs_remote_open(path, fi->flags, file);
+
+			if ( res )
+			{
+				fprintf(stderr, "\033[34;1mkivfs_open: REMOTE OPEN FAILED %d\033[0m\n", res);
+				return res;
+			}
+			else{
+				fprintf(stderr, "\033[34;1mkivfs_open: REMOTE OPEN OK\033[0m\n");
+			}
+
+			/* If file is NOT too large */
+			if ( file_info->size < get_cache_size() / 2 )
+			{
+				file->fd = open(full_path , fi->flags | O_RDWR | (access(full_path, F_OK) != 0 ? O_CREAT : 0), S_IRUSR | S_IWUSR ); /* Open if exists, or create in cache */
+				if ( file->fd == -1 )
+				{
+					fprintf(stderr, "\033[33;1mkivfs_open: LOCAL OPEN FAILED\033[0m\n");
+				}
+				else
+				{
+					fprintf(stderr, "\033[34;1mkivfs_open: LOCAL OPEN OK\033[0m\n");
+				}
+			}
+
+			cache_update(path, fi, file_info);
+		}
+
+		/* local file is up to date, we don't need to open remote file */
+		else
+		{
+			fprintf(stderr, "Local file is up to date.\n");
+
+			file->fd = open(full_path , fi->flags); /* Open if exists, or create in cache */
+			if ( file->fd == -1 )
+			{
+				fprintf(stderr, "\033[33;1mkivfs_open: LOCAL OPEN FAILED\033[0m\n");
+			}
+			else
+			{
+				fprintf(stderr, "\033[34;1mkivfs_open: LOCAL OPEN OK\033[0m\n");
+			}
+		}
+
+		cache_update_read_hits( path );
+		kivfs_free_file( file_info );
 	}
 
 
 	free( full_path );
-	return res;
+
+	/* if some descriptor is set, then everything is OK */
+	return file->fd == -1 && file->r_fd == 0 ? -ENOENT : KIVFS_OK;
 }
 
 static int kivfs_read(const char *path, char *buf, size_t size,
 		off_t offset, struct fuse_file_info *fi){
 
-	size_t local_size;
+	ssize_t local_size;
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
-	local_size = pread(((kivfs_ofile_t *)fi->fh)->fd, buf, size, offset);
+	/* if no remote descriptor, then local is set */
+	if ( !file->r_fd )
+	{
+		local_size = pread(file->fd, buf, size, offset);
+	}
+	else
+	{
 
-	if( local_size == -1 ){
+		struct stat stbuf;
+		cache_getattr(path, &stbuf);
+
+		if( size + offset > stbuf.st_size ){
+			size = stbuf.st_size - offset;
+		}
+
+		local_size = kivfs_remote_read(file, buf, size, offset);
+
+		/* if file can fit into cache */
+		if ( file->fd != -1 )
+		{
+			fprintf(stderr, "COPY to CACHE fd: %lu | size: %lu\n",file->fd, local_size);
+			fwrite(buf, 1, local_size, stderr);
+			if( pwrite(file->fd, buf, local_size, offset) <= 0 )
+			{
+				perror("pwrite: ERRRRRRR");
+			}
+		}
+	}
+
+	/*if( local_size == -1 ){
 		int r_size;
 		struct stat stbuf;
 
@@ -153,7 +264,7 @@ static int kivfs_read(const char *path, char *buf, size_t size,
 
 			r_size = kivfs_remote_read(file, buf, size, offset);
 		}
-	}
+	}*/
 
 	return size;
 }
@@ -161,7 +272,28 @@ static int kivfs_read(const char *path, char *buf, size_t size,
 static int kivfs_write(const char *path, const char *buf, size_t size,
 		off_t offset, struct fuse_file_info *fi){
 
-	size_t local_size;
+	ssize_t _size = 0;
+	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
+
+	if ( file->r_fd )
+	{
+		_size = kivfs_remote_write(file, buf, size, offset);
+		fprintf(stderr, "kivfs_write: REMOTE WRITE %ld bytes\n", _size);
+	}
+
+	/* set log flag */
+	else
+	{
+		file->write = 1;
+	}
+
+	if (file->fd != -1 && _size == size)
+	{
+		_size = pwrite(file->fd, buf, _size, offset);
+		fprintf(stderr, "kivfs_write: LOCAL WRITE %ld bytes %lu\n", _size, (size_t)_size);
+	}
+
+	/*ssize_t local_size;
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
 	local_size = pwrite(file->fd, buf, size, offset);
@@ -173,17 +305,17 @@ static int kivfs_write(const char *path, const char *buf, size_t size,
 
 	printf("kivfs_write: r_fd: %lu\n", file->r_fd);
 	if( file->r_fd ){
-		int r_size;
 
-		r_size = kivfs_remote_write(file, buf, size, offset);
+		 ssize_t remote_size;
 
+		remote_size = kivfs_remote_write(file, buf, size, offset);
 
 		file->write = 1;
-		size = r_size;
-	}
+		size = remote_size;
+	}*/
 
-
-	return size;
+	fprintf(stderr, "kivfs_write: TOTAL WRITE %ld bytes %lu\n", _size, (size_t)_size);
+	return _size == -1 ? -errno : _size;
 }
 
 static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi){
@@ -258,7 +390,10 @@ static int kivfs_release(const char *path, struct fuse_file_info *fi){
 	//TODO: odeslat změny na server
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
-	close( file->fd );
+	if ( file->fd != -1 )
+	{
+		close( file->fd );
+	}
 
 	if( file->r_fd ){
 		if( kivfs_remote_close( file ) ){
@@ -273,7 +408,26 @@ static int kivfs_release(const char *path, struct fuse_file_info *fi){
 	if( file->write ){
 		//cache_log(path, NULL, KIVFS_WRITE);
 		//cache_sync();
-		cache_update(path, fi);
+
+		/* small file update from cache */
+		if ( file->fd != -1 )
+		{
+			cache_update(path, fi, NULL);
+		}
+
+		/* big from server */
+		else
+		{
+			kivfs_file_t *file_info;
+			kivfs_remote_file_info(path, &file_info);
+
+			cache_update(path, fi, file_info);
+			kivfs_free_file( file_info );
+		}
+		/*printf("SLEEP\n");
+		sleep(10);
+		printf("SLEEP END\n");*/
+		//kivfs_put_from_cache( path );
 	}
 
 	free( file );

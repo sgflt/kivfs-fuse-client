@@ -40,6 +40,7 @@
 /*------------------- Functions: ANSI C prototypes -------------------------*/
 
 int kivfs_get_to_cache(const char *path );
+int kivfs_put_from_cache(const char *path);
 int kivfs_session_init();
 int kivfs_connect(kivfs_connection_t *connection, int attempts);
 void kivfs_session_disconnect();

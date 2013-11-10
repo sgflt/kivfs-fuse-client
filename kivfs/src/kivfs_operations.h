@@ -31,6 +31,8 @@ typedef enum {
 
 #define KIVFS_WRITE_CHMOD 459
 
+typedef int kivfs_version_t;
+
 /*---------------------------- Variables -----------------------------------*/
 extern struct fuse_operations kivfs_operations;
 

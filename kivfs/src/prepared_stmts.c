@@ -16,8 +16,8 @@
 
 
 void prepare_cache_add(sqlite3_stmt **stmt, sqlite3 *db){
-//TODO INSERT OR REPLACE
-	char *sql = 	"INSERT INTO files(path, size, mtime, atime, mode, own, grp, read_hits, write_hits, version)"
+//TODO INSERT OR REPLACE ale nesmí se nahradit, když je v lokálu starší verzem jinak by to hlásilo aktuální a četla by se stará
+	char *sql = 	"INSERT OR REPLACE INTO files(path, size, mtime, atime, mode, own, grp, read_hits, write_hits, version)"
 					"VALUES(:path, :size, :mtime, :atime, :mode, :owner, :group, :read_hits, :write_hits, :version)";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
@@ -254,9 +254,6 @@ void prepare_cache_update(sqlite3_stmt **stmt, sqlite3 *db){
 					"	mtime = :mtime,					"
 					"	atime = :atime,					"
 					"	mode = :mode,					"
-					"	read_hits = :read_hits,			"
-					"	write_hits = :write_hits,		"
-					"	version = version + 1 			"
 					"WHERE path LIKE :path				";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
@@ -264,4 +261,37 @@ void prepare_cache_update(sqlite3_stmt **stmt, sqlite3 *db){
 	}
 	else
 		fprintf(stderr,"\033[33;1mprepare_cache_update:\033[0;0m %s\n", sqlite3_errmsg( db ));
+}
+
+void prepare_cache_get_version(sqlite3_stmt **stmt, sqlite3 *db)
+{
+	char *sql = 	"SELECT version	FROM files WHERE path LIKE :path ";
+
+	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
+		fprintf(stderr,"\033[31;1mprepare_cache_update:\033[0;0m %s\n", sqlite3_errmsg( db ));
+	}
+	else
+		fprintf(stderr,"\033[33;1mprepare_cache_update:\033[0;0m %s\n", sqlite3_errmsg( db ));
+}
+
+void prepare_cache_update_read_hits(sqlite3_stmt **stmt, sqlite3 *db)
+{
+	char *sql = 	"UPDATE files SET read_hits = read_hits + 1 WHERE path LIKE :path ";
+
+	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
+		fprintf(stderr,"\033[31;1mprepare_cache_read_hits:\033[0;0m %s\n", sqlite3_errmsg( db ));
+	}
+	else
+		fprintf(stderr,"\033[33;1mprepare_cache_read_hits:\033[0;0m %s\n", sqlite3_errmsg( db ));
+}
+
+void prepare_cache_update_write_hits(sqlite3_stmt **stmt, sqlite3 *db)
+{
+	char *sql = 	"UPDATE files SET version = version + 1, write_hits = write_hits + 1 WHERE path LIKE :path ";
+
+	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
+		fprintf(stderr,"\033[31;1mprepare_cache_write_hits:\033[0;0m %s\n", sqlite3_errmsg( db ));
+	}
+	else
+		fprintf(stderr,"\033[33;1mprepare_cache_write_hits:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }

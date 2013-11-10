@@ -12,6 +12,8 @@
 #include <fuse.h>
 #include <sys/types.h>
 
+#include "kivfs_operations.h"
+
 /*---------------------------- Structures ----------------------------------*/
 
 /*---------------------------- CONSTANTS -----------------------------------*/
@@ -31,7 +33,11 @@ mode_t cache_file_mode(const char *path);
 int cache_chmod(const char *path, mode_t mode);
 int cache_sync();
 int cache_updatedir(kivfs_list_t *files);
-int cache_update(const char *path, struct fuse_file_info *fi);
+int cache_update(const char *path, struct fuse_file_info *fi, kivfs_file_t *file_info);
+void cache_update_read_hits(const char *path );
+void cache_update_write_hits(const char *path );
+kivfs_version_t cache_get_version(const char * path );
+
 
 /*----------------------------- Macros -------------------------------------*/
 

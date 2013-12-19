@@ -59,13 +59,13 @@ int kivfs_login(const char *username, const char *password){
 			);
 
 	/* If received some data */
-	if( !res ){
-
+	if ( !res )
+	{
 		res = response->head->return_code;
 
 		/* If no error occured on server side */
-		if( !res ){
-
+		if ( !res )
+		{
 			res = kivfs_unpack(
 					response->data,
 					response->head->data_size,
@@ -74,8 +74,8 @@ int kivfs_login(const char *username, const char *password){
 					);
 
 			/* If succesfully unpacked */
-			if( !res ){
-
+			if ( !res )
+			{
 				sessid = client->user->id;
 				fprintf(stderr, "Connection established.");
 				return KIVFS_OK;
@@ -89,9 +89,10 @@ int kivfs_login(const char *username, const char *password){
 }
 
 
-int kivfs_session_init(){
+int kivfs_session_init()
+{
 //147.228.63.46		147.228.63.47	 147.228.63.48 147.228.67.121
-	kivfs_set_connection(&connection, "192.168.2.14", 30003);
+	kivfs_set_connection(&connection, "147.228.63.47", 30003);
 	kivfs_print_connection( &connection );
 
 	kivfs_connect(&connection, 1);
@@ -100,12 +101,14 @@ int kivfs_session_init(){
 	return 0;
 }
 
-void kivfs_session_disconnect(){
+void kivfs_session_disconnect()
+{
 	kivfs_disconnect(connection.socket);
 	//TODO close all conections on files
 }
 
-int kivfs_remote_file_info(const char * path, kivfs_file_t **file){
+int kivfs_remote_file_info(const char * path, kivfs_file_t **file)
+{
 
 	int res;
 	kivfs_msg_t *response;
@@ -124,12 +127,14 @@ int kivfs_remote_file_info(const char * path, kivfs_file_t **file){
 			&response
 			);
 
-	if( !res ){
+	if ( !res )
+	{
 		fprintf(stderr,"\033[33;1mFile info request sent %s\033[0m\n", path);
 
 		res = response->head->return_code;
 
-		if( !res ){
+		if ( !res )
+		{
 			res = kivfs_unpack(
 					response->data,
 					response->head->data_size,
@@ -137,11 +142,13 @@ int kivfs_remote_file_info(const char * path, kivfs_file_t **file){
 					file
 					);
 
-			if( !res ){
+			if ( !res )
+			{
 				fprintf(stderr,"\033[33;1mFile info complete %s\033[0m\n", path);
 				//kivfs_print_file( file );
 			}
-			else{
+			else
+			{
 				printf("\033[33;1mFile not unpacked!\033[0m");
 			}
 		}
@@ -152,7 +159,8 @@ int kivfs_remote_file_info(const char * path, kivfs_file_t **file){
 }
 
 
-int kivfs_get_to_cache(const char *path){
+int kivfs_get_to_cache(const char *path)
+{
 //TODO
 	int res;
 	kivfs_msg_t *response;
@@ -163,7 +171,8 @@ int kivfs_get_to_cache(const char *path){
 	res = kivfs_remote_file_info(path, &file_info);
 	fprintf(stderr,"\033[33;1mDownloading whole file %s %llu\033[0m\n", path, file_info->size);
 
-	if( res ){
+	if ( res )
+	{
 		fprintf(stderr,"\033[34;1mFile info"
 				" failed %s\033[0m\n", path);
 		return res;
@@ -172,7 +181,8 @@ int kivfs_get_to_cache(const char *path){
 
 	res = kivfs_remote_open(path, KIVFS_FILE_MODE_READ, &file);
 
-	if( res ){
+	if ( res )
+	{
 		fprintf(stderr,"\033[31;1mFile open failed %s\033[0m\n", path);
 		return res;
 	}
@@ -192,33 +202,39 @@ int kivfs_get_to_cache(const char *path){
 			&response
 			);
 
-	if( !res ){
-
+	if ( !res )
+	{
 		res = response->head->return_code;
 
 		/* Check to errors on server side */
-		if( !res ){
+		if ( !res )
+		{
 			char buf[BUFFER_1K];
 			ssize_t bytes_received_now;
 			char *full_path = get_full_path( path );
 			FILE *cache_file = fopen(full_path, "wb");
 			free( full_path );
 
-			if( !cache_file ){
+			if ( !cache_file )
+			{
 				return -errno;
 			}
 
-			for(ssize_t bytes_received = 0LL;
+			for (ssize_t bytes_received = 0LL;
 					bytes_received < file_info->size;
-					bytes_received += bytes_received_now){
-				if( file_info->size - bytes_received < BUFFER_1K){
+					bytes_received += bytes_received_now)
+			{
+				if ( file_info->size - bytes_received < BUFFER_1K)
+				{
 					bytes_received_now = read(file.connection.socket, buf, BUFFER_1K);
 				}
-				else{
+				else
+				{
 					bytes_received_now = read(file.connection.socket, buf, file_info->size - bytes_received);
 				}
 
-				if( bytes_received_now == -1 ){
+				if ( bytes_received_now == -1 )
+				{
 					fclose( cache_file );
 					kivfs_free_msg( response );
 					return KIVFS_ERROR;
@@ -235,7 +251,8 @@ int kivfs_get_to_cache(const char *path){
 }
 
 
-int kivfs_put_from_cache(const char *path){
+int kivfs_put_from_cache(const char *path)
+{
 //TODO
 	int res;
 	kivfs_msg_t *response;
@@ -246,7 +263,8 @@ int kivfs_put_from_cache(const char *path){
 	res = kivfs_remote_file_info(path, &file_info);
 	fprintf(stderr,"\033[33;1mUploading whole file %s %llu\033[0m\n", path, file_info->size);
 
-	if( res ){
+	if ( res )
+	{
 		fprintf(stderr,"\033[34;1mFile info"
 				" failed %s\033[0m\n", path);
 		return res;
@@ -255,7 +273,8 @@ int kivfs_put_from_cache(const char *path){
 
 	res = kivfs_remote_open(path, KIVFS_FILE_MODE_WRITE, &file);
 
-	if( res ){
+	if ( res )
+	{
 		fprintf(stderr,"\033[31;1mFile open failed %s\033[0m\n", path);
 		return res;
 	}
@@ -275,12 +294,13 @@ int kivfs_put_from_cache(const char *path){
 			&response
 			);
 
-	if( !res ){
-
+	if ( !res )
+	{
 		res = response->head->return_code;
 
 		/* Check to errors on server side */
-		if( !res ){
+		if ( !res )
+		{
 			char buf[BUFFER_128K];
 			ssize_t bytes_sent_now;
 			struct stat stbuf;
@@ -398,22 +418,22 @@ int kivfs_remote_sync(const char *path, const char *new_path, KIVFS_VFS_COMMAND 
 kivfs_file_mode_t mode_utok(mode_t mode){
 
 	if( mode & O_RDWR ){
+		fprintf(stderr,"KIVFS_FILE_MODE_READ_WRITE\n");
 		return KIVFS_FILE_MODE_READ_WRITE;
 	}
 
-	if( mode & O_RDONLY ){
-		return KIVFS_FILE_MODE_READ;
-	}
-
 	if( mode & O_WRONLY ){
+		fprintf(stderr,"KIVFS_FILE_MODE_WRITE\n");
 		return KIVFS_FILE_MODE_WRITE;
 	}
 
 	if( mode & O_APPEND ){
+		fprintf(stderr,"KIVFS_FILE_MODE_APPEND\n");
 		return KIVFS_FILE_MODE_APPEND;
 	}
 
-	return KIVFS_FILE_MODE_READ_WRITE;
+	fprintf(stderr,"KIVFS_FILE_MODE_READ\n");
+	return KIVFS_FILE_MODE_READ;
 }
 
 int kivfs_remote_open(const char *path, mode_t mode, kivfs_ofile_t *file){

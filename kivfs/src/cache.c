@@ -757,6 +757,7 @@ int cache_update(const char *path, struct fuse_file_info *fi, kivfs_file_t *file
 		bind_int(update_stmt,	":mtime",		file_info->mtime);
 		bind_int(update_stmt,	":atime",		file_info->atime);
 		bind_int(update_stmt,	":mode",		mode);
+		bind_int(update_stmt,	":version",		file_info->version);
 
 	}
 
@@ -788,10 +789,10 @@ void cache_update_write_hits(const char *path )
 
 	if( sqlite3_reset( update_stmt ) != SQLITE_OK )
 	{
-		fprintf(stderr,"\033[31;1mcache_update: faiulure%s\033[0;0m %s %d \n",  path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+		fprintf(stderr,"\033[31;1mcache_update_write_hits: faiulure%s\033[0;0m %s %d \n",  path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 	else
 	{
-		fprintf(stderr,"\033[35;1mCache update ok: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+		fprintf(stderr,"\033[35;1mcache_update_write_hits OK: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 }

@@ -253,7 +253,8 @@ void prepare_cache_update(sqlite3_stmt **stmt, sqlite3 *db){
 					"	size = :size,					"
 					"	mtime = :mtime,					"
 					"	atime = :atime,					"
-					"	mode = :mode					"
+					"	mode = :mode,					"
+					"	version = :version				"
 					"WHERE path LIKE :path				";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){

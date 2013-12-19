@@ -25,23 +25,26 @@
 #define concat(cache_path, path) { strcat(full_path, cache_path); strcat(full_path, path); }
 
 
-static int kivfs_getattr(const char *path, struct stat *stbuf){
-
+static int kivfs_getattr(const char *path, struct stat *stbuf)
+{
 	int res = 0;
 	memset(stbuf, 0, sizeof(struct stat));
 
 
 	fprintf(stderr,"\033[31;1mgetattr %s\033[0;0m ", path);
 
-	if( strcmp(path, "/") == 0 ){
+	if ( strcmp(path, "/") == 0 )
+	{
 		stbuf->st_mode = S_IFDIR | S_IRWXU;
 		stbuf->st_nlink = 2;
 	}
-	else {
+	else
+	{
 		char *full_path = get_full_path( path );
 
 		/* If stat fails, retrieve info from db or remote server */
-		if( stat(full_path, stbuf) ){
+		if ( stat(full_path, stbuf) )
+		{
 			perror("\033[31;1mlstat\033[0;0m ");
 
 			//TODO: remote get attr or cache dunno now
@@ -56,16 +59,18 @@ static int kivfs_getattr(const char *path, struct stat *stbuf){
 	return res;
 }
 
-static int kivfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi){
-
+static int kivfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
+{
 	int res;
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
-	if( file->fd != -1 ){
+	if ( file->fd != -1 )
+	{
 		fprintf(stderr,"\033[31;1m fgetarr %lu\n\033[0m", file->fd);
 		res = fstat(file->fd, stbuf);
 	}
-	else if( file->r_fd ){
+	else if ( file->r_fd )
+	{
 		res = cache_getattr(path, stbuf);
 	}
 
@@ -122,20 +127,28 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 	{
 		kivfs_remote_open(path, fi->flags, file);
 
-		file->fd = open(full_path , fi->flags | (access(full_path, F_OK) != 0 ? O_CREAT : 0), S_IRUSR | S_IWUSR ); /* Open if exists, or create in cache */
+		//XXX: do while will be better
+		file->fd = open(full_path, fi->flags | (access(full_path, F_OK) != 0 ? O_CREAT : 0), S_IRUSR | S_IWUSR ); /* Open if exists, or create in cache */
 
 		if ( file->fd == -1 )
 		{
-			fprintf(stderr, "\033[33;1mkivfs_open: LOCAL OPEN FAILED\033[0m\n");
+			/* Maybe some dirs are just in database */
+			file->fd = recreate_and_open(full_path, fi->flags | O_RDWR | (access(full_path, F_OK) != 0 ? O_CREAT : 0));
+
+			if ( file->fd == -1 )
+			{
+				fprintf(stderr, "\033[33;1mkivfs_open: LOCAL OPEN FAILED mode WRONLY\033[0m\n");
+				return -ENOENT;
+			}
 		}
 		else
 		{
-			fprintf(stderr, "\033[34;1mkivfs_open: LOCAL OPEN OK\033[0m\n");
+			fprintf(stderr, "\033[34;1mkivfs_open: LOCAL OPEN OK  mode WRONLY\033[0m\n");
 		}
 		cache_update_write_hits( path );
 	}
 
-	/* READ_ONLY or RDWR */
+	/* READ_ONLY or RDWR. Remote file is copied into cache. */
 	else
 	{
 		int res;
@@ -156,7 +169,7 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 		/* if local file is older than remote or doesn't exist */
 		if ( file_info->version != cache_get_version( path ) || access(full_path, F_OK) != 0 )
 		{
-			fprintf(stderr, "Remote file is newer, local will be replaced.\n");
+			fprintf(stderr, "\033[34;1mRemote file is newer, local will be replaced.\033[0m\n");
 
 
 			res = kivfs_remote_open(path, fi->flags, file);
@@ -174,9 +187,19 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 			if ( file_info->size < get_cache_size() / 2 )
 			{
 				file->fd = open(full_path , fi->flags | O_RDWR | (access(full_path, F_OK) != 0 ? O_CREAT : 0), S_IRUSR | S_IWUSR ); /* Open if exists, or create in cache */
+
 				if ( file->fd == -1 )
 				{
+					/* Maybe some dirs are just in database */
+					file->fd = recreate_and_open(full_path, fi->flags | O_RDWR | (access(full_path, F_OK) != 0 ? O_CREAT : 0));
+
+					if ( file->fd == -1 )
+					{
+						fprintf(stderr, "\033[33;1mkivfs_open: LOCAL OPEN FAILED\033[0m\n");
+						return -ENOENT;
+					}
 					fprintf(stderr, "\033[33;1mkivfs_open: LOCAL OPEN FAILED\033[0m\n");
+					perror("File creation failed");
 				}
 				else
 				{
@@ -270,8 +293,8 @@ static int kivfs_read(const char *path, char *buf, size_t size,
 }
 
 static int kivfs_write(const char *path, const char *buf, size_t size,
-		off_t offset, struct fuse_file_info *fi){
-
+		off_t offset, struct fuse_file_info *fi)
+{
 	ssize_t _size = 0;
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
@@ -287,7 +310,7 @@ static int kivfs_write(const char *path, const char *buf, size_t size,
 		file->write = 1;
 	}
 
-	if (file->fd != -1 && _size == size)
+	if ( file->fd != -1 && _size == size )
 	{
 		_size = pwrite(file->fd, buf, _size, offset);
 		fprintf(stderr, "kivfs_write: LOCAL WRITE %ld bytes %lu\n", _size, (size_t)_size);
@@ -318,15 +341,15 @@ static int kivfs_write(const char *path, const char *buf, size_t size,
 	return _size == -1 ? -errno : _size;
 }
 
-static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi){
-
-
+static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
+{
 	kivfs_ofile_t *file;
 	char *full_path = get_full_path( path );
 
 	file = (kivfs_ofile_t *)malloc( sizeof( kivfs_ofile_t ) );
 
-	if( !file ){
+	if ( !file )
+	{
 		return -ENOMEM;
 	}
 
@@ -336,28 +359,24 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 	file->fd = creat(full_path, mode);	// fi->fh pro rychlejší přístup, zatim k ničemu
 
 	/* If create fails */
-	if( file->fd == -1 ){
-
+	if ( file->fd == -1 )
+	{
 		/* Maybe some dirs are just in database */
-		if( mkdirs( full_path ) ){
-			return -errno;
-		}
+		file->fd = recreate_and_open(full_path , mode);
 
-		/* Try again */
-		file->fd = creat(full_path, mode);
-
-		if( file->fd == -1 ){
+		if ( file->fd == -1 )
+		{
 			free( full_path );
 			return -errno;
 		}
 	}
 
-
-
 	free( full_path );
 
-	if( !cache_add(path, NULL) ){
-		if( !kivfs_remote_create(path, mode, file) ){
+	if ( !cache_add(path, NULL) )
+	{
+		if ( !kivfs_remote_create(path, mode, file) )
+		{
 			//TODO check type of error
 			cache_log(path, NULL, KIVFS_TOUCH);
 		}
@@ -368,8 +387,8 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 
 }
 
-static int kivfs_access(const char *path, int mask){
-
+static int kivfs_access(const char *path, int mask)
+{
 	int res;
 	char *full_path = get_full_path( path );
 
@@ -377,7 +396,8 @@ static int kivfs_access(const char *path, int mask){
 	free( full_path );
 
 	/* If a file is not present in cache, compute acces rights from database. */
-	if( res ){
+	if ( res )
+	{
 		fprintf(stderr, "\033[33;1m Access mode %o mask %o result %d \033[0;0m",cache_file_mode( path ), mask,  cache_file_mode( path ) & mask ? F_OK : -EACCES);
 		return cache_file_mode( path ) & mask ? F_OK : -EACCES;
 	}
@@ -385,8 +405,8 @@ static int kivfs_access(const char *path, int mask){
 	return res;
 }
 
-static int kivfs_release(const char *path, struct fuse_file_info *fi){
-
+static int kivfs_release(const char *path, struct fuse_file_info *fi)
+{
 	//TODO: odeslat změny na server
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
@@ -395,17 +415,21 @@ static int kivfs_release(const char *path, struct fuse_file_info *fi){
 		close( file->fd );
 	}
 
-	if( file->r_fd ){
-		if( kivfs_remote_close( file ) ){
+	if ( file->r_fd )
+	{
+		if ( kivfs_remote_close( file ) )
+		{
 			fprintf(stderr, "Error: Close remote file");
 		}
-		else{
+		else
+		{
 			fprintf(stderr, "File CLOSED");
 		}
 	}
 
 	//TODO BIGFILE
-	if( file->write ){
+	if ( file->write )
+	{
 		//cache_log(path, NULL, KIVFS_WRITE);
 		//cache_sync();
 
@@ -434,8 +458,8 @@ static int kivfs_release(const char *path, struct fuse_file_info *fi){
 	return 0;
 }
 
-static int kivfs_truncate(const char *path, off_t size){
-
+static int kivfs_truncate(const char *path, off_t size)
+{
 	int res;
 	char *full_path = get_full_path( path );
 
@@ -452,11 +476,12 @@ static int kivfs_truncate(const char *path, off_t size){
 	return 0;
 }
 
-static int kivfs_ftruncate(const char *path, off_t size, struct fuse_file_info *fi){
-
+static int kivfs_ftruncate(const char *path, off_t size, struct fuse_file_info *fi)
+{
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
-	if( file->fd != -1 && ftruncate(file->fd, size) ){
+	if ( file->fd != -1 && ftruncate(file->fd, size) )
+	{
 		return -errno;
 	}
 
@@ -466,10 +491,11 @@ static int kivfs_ftruncate(const char *path, off_t size, struct fuse_file_info *
 	return 0;
 }
 
-static int kivfs_rename(const char *old_path, const char *new_path){
-
+static int kivfs_rename(const char *old_path, const char *new_path)
+{
 	/* If renamed in databese, then rename in cache. */
-	if( !cache_rename(old_path, new_path) ){
+	if ( !cache_rename(old_path, new_path) )
+	{
 		char *full_old_path = get_full_path( old_path );
 		char *full_new_path = get_full_path( new_path );
 
@@ -486,24 +512,26 @@ static int kivfs_rename(const char *old_path, const char *new_path){
 	return -EISDIR;
 }
 
-int kivfs_lock(const char *path, struct fuse_file_info *fi, int cmd, struct flock *lock){
-
+int kivfs_lock(const char *path, struct fuse_file_info *fi, int cmd, struct flock *lock)
+{
 	int res;
 
 	res = ulockmgr_op(((kivfs_ofile_t *)fi->fh)->fd, cmd,lock, &fi->lock_owner, sizeof(fi->lock_owner));
 
-	if( res == -1 ){
+	if ( res == -1 )
+	{
 		res = -errno;
 	}
 
 	return res;
 }
 
-static int kivfs_unlink(const char *path){
-
+static int kivfs_unlink(const char *path)
+{
 	//TODO remote remove and add second parameter for cache_remove
 	// FLAG_AS_REMOVED + SYNC || DELETE
-	if( !cache_remove( path ) ){
+	if ( !cache_remove( path ) )
+	{
 		char *full_path = get_full_path( path );
 
 		cache_log(path, NULL, KIVFS_UNLINK);
@@ -513,27 +541,29 @@ static int kivfs_unlink(const char *path){
 		return 0;
 	}
 
-
 	return -ENOENT;
 }
 
-static int kivfs_mkdir(const char *path, mode_t mode){
-
+static int kivfs_mkdir(const char *path, mode_t mode)
+{
 	int res;
 	char *full_path = get_full_path( path );
 
 	res = mkdir(full_path, mode);
 
-	if( res == -1 ){
+	if ( res == -1 )
+	{
 		/* Maybe some dirs are just in database */
-		if( mkdirs( full_path ) ){
+		if ( mkdirs( full_path ) )
+		{
 			return -errno;
 		}
 
 		/* Try again */
 		res = mkdir(full_path, mode);
 
-		if( res == -1 ){
+		if ( res == -1 )
+		{
 			free( full_path );
 			return -errno;
 		}
@@ -541,7 +571,8 @@ static int kivfs_mkdir(const char *path, mode_t mode){
 
 	free( full_path );
 
-	if( !cache_add(path, NULL) ){
+	if ( !cache_add(path, NULL) )
+	{
 		cache_log(path, NULL, KIVFS_MKDIR);
 		cache_sync();
 		return 0;
@@ -551,11 +582,12 @@ static int kivfs_mkdir(const char *path, mode_t mode){
 	return -EEXIST;
 }
 
-static int kivfs_rmdir(const char *path){
-
+static int kivfs_rmdir(const char *path)
+{
 	//TODO remote remove and add second parameter for cache_remove
 	// FLAG_AS_REMOVED + SYNC || DELETE
-	if( !cache_remove( path ) ){
+	if ( !cache_remove( path ) )
+	{
 		char *full_path = get_full_path( path );
 
 		/* If a directory contains files, then rmdir will fail */
@@ -580,8 +612,8 @@ static int kivfs_rmdir(const char *path){
 
 
 
-static int kivfs_utimens(const char *path, const struct timespec tv[2]){
-
+static int kivfs_utimens(const char *path, const struct timespec tv[2])
+{
 	int res;
 	char *full_path = get_full_path( path );
 
@@ -591,7 +623,8 @@ static int kivfs_utimens(const char *path, const struct timespec tv[2]){
 	return 0; // Don't worry about ENOENT
 }
 
-static int kivfs_chmod(const char *path, mode_t mode){
+static int kivfs_chmod(const char *path, mode_t mode)
+{
 	//TODO online chmod
 
 	char *full_path = get_full_path( path );
@@ -604,13 +637,15 @@ static int kivfs_chmod(const char *path, mode_t mode){
 	return 0;
 }
 
-static void *kivfs_init(struct fuse_conn_info *conn){
+static void *kivfs_init(struct fuse_conn_info *conn)
+{
 	kivfs_session_init();
 	//TODO
 	return NULL;
 }
 
-static void kivfs_destroy(void * ptr){
+static void kivfs_destroy(void * ptr)
+{
 	//TODO
 
 	cache_close();
@@ -619,12 +654,15 @@ static void kivfs_destroy(void * ptr){
 	fprintf(stderr, "ALL OK\n");
 }
 
-int kivfs_fsync(const char *path, int data, struct fuse_file_info *fi){
+int kivfs_fsync(const char *path, int data, struct fuse_file_info *fi)
+{
 
-	if( fi ){
+	if ( fi )
+	{
 		data ? fdatasync( ((kivfs_ofile_t *)fi->fh)->fd ) : fsync( ((kivfs_ofile_t *)fi->fh)->fd );
 	}
-	else{
+	else
+	{
 		cache_sync();
 	}
 

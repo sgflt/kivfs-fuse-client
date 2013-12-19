@@ -34,6 +34,17 @@ int mkdirs(const char *path){
 	return 0;
 }
 
+int recreate_and_open(const char *path, mode_t mode)
+{
+	if ( mkdirs( path ) )
+	{
+		return -errno;
+	}
+
+	/* Try again */
+	return creat(path, mode);
+}
+
 void print_open_mode(int mode)
 {
 	fprintf(stderr,"\n\033[33;1m\t PRINT MODE: %o\033[0;0m\n", mode);

@@ -109,6 +109,8 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 {
 	kivfs_ofile_t *file;
 	char *full_path = get_full_path( path );
+	struct stat stbuf;
+	cache_getattr(path, &stbuf);
 
 	file = (kivfs_ofile_t *)malloc( sizeof( kivfs_ofile_t ) );
 
@@ -133,7 +135,7 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 		if ( file->fd == -1 )
 		{
 			/* Maybe some dirs are just in database */
-			file->fd = recreate_and_open(full_path, fi->flags | O_RDWR | (access(full_path, F_OK) != 0 ? O_CREAT : 0));
+			file->fd = recreate_and_open(full_path, stbuf.st_mode);
 
 			if ( file->fd == -1 )
 			{
@@ -179,7 +181,8 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 				fprintf(stderr, "\033[34;1mkivfs_open: REMOTE OPEN FAILED %d\033[0m\n", res);
 				return res;
 			}
-			else{
+			else
+			{
 				fprintf(stderr, "\033[34;1mkivfs_open: REMOTE OPEN OK\033[0m\n");
 			}
 
@@ -191,7 +194,7 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 				if ( file->fd == -1 )
 				{
 					/* Maybe some dirs are just in database */
-					file->fd = recreate_and_open(full_path, fi->flags | O_RDWR | (access(full_path, F_OK) != 0 ? O_CREAT : 0));
+					file->fd = recreate_and_open(full_path, stbuf.st_mode);
 
 					if ( file->fd == -1 )
 					{

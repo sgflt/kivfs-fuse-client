@@ -630,7 +630,7 @@ int kivfs_remote_create(const char *path, mode_t mode, kivfs_ofile_t *file){
 	res = kivfs_remote_touch( path );
 
 	if( !res ){
-		res = kivfs_remote_open(path, KIVFS_FILE_MODE_READ_WRITE, file);
+		res = kivfs_remote_open(path, O_RDWR, file);
 	}
 
 	if( !res ){

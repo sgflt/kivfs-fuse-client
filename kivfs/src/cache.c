@@ -53,6 +53,8 @@ pthread_mutex_t chmod_mutex;
 pthread_mutex_t sync_mutex;
 pthread_mutex_t update_mutex;
 pthread_mutex_t get_version_mutex;
+pthread_mutex_t update_read_hits_mutex;
+pthread_mutex_t update_write_hits_mutex;
 
 
 
@@ -79,17 +81,19 @@ void prepare_statements(){
 }
 
 void init_mutexes(){
-	pthread_mutex_init(&add_mutex,		NULL);
-	pthread_mutex_init(&rename_mutex, 	NULL);
-	pthread_mutex_init(&remove_mutex, 	NULL);
-	pthread_mutex_init(&log_mutex, 		NULL);
-	pthread_mutex_init(&readdir_mutex, 	NULL);
-	pthread_mutex_init(&getattr_mutex, 	NULL);
-	pthread_mutex_init(&get_fmod_mutex, 	NULL);
-	pthread_mutex_init(&chmod_mutex,		NULL);
-	pthread_mutex_init(&sync_mutex,		NULL);
-	pthread_mutex_init(&update_mutex,		NULL);
-	pthread_mutex_init(&get_version_mutex,NULL);
+	pthread_mutex_init(&add_mutex,				NULL);
+	pthread_mutex_init(&rename_mutex, 			NULL);
+	pthread_mutex_init(&remove_mutex, 			NULL);
+	pthread_mutex_init(&log_mutex, 				NULL);
+	pthread_mutex_init(&readdir_mutex, 			NULL);
+	pthread_mutex_init(&getattr_mutex, 			NULL);
+	pthread_mutex_init(&get_fmod_mutex, 			NULL);
+	pthread_mutex_init(&chmod_mutex,				NULL);
+	pthread_mutex_init(&sync_mutex,				NULL);
+	pthread_mutex_init(&update_mutex,				NULL);
+	pthread_mutex_init(&get_version_mutex,		NULL);
+	pthread_mutex_init(&update_read_hits_mutex,	NULL);
+	pthread_mutex_init(&update_write_hits_mutex,	NULL);
 }
 
 int cache_init(){
@@ -136,7 +140,7 @@ int cache_init(){
 				"grp 			TEXT NOT NULL,"
 			    "read_hits 		INT NOT NULL DEFAULT ('0'),"
 				"write_hits 	INT NOT NULL DEFAULT ('0'),"
-				//"type 			INT NOT NULL,"
+				"cached 		INT NOT NULL DEFAULT ('0'),"
 				"version 		TEXT NOT NULL)",
 			    NULL,
 			    NULL,
@@ -232,9 +236,9 @@ int cache_add(const char *path, kivfs_file_t *file){
 		bind_int(add_stmt,	":size",		file->size);
 		bind_int(add_stmt,	":mtime",		file->mtime);
 		bind_int(add_stmt,	":atime",		file->atime);
-		bind_int(add_stmt,	":mode",	 	mode | (file->type == FILE_TYPE_DIRECTORY ? 0040000 : 0100000) );
-		bind_int(add_stmt,	":owner",		getuid());
-		bind_int(add_stmt,	":group",		getgid());
+		bind_int(add_stmt,	":mode",	 	mode | (file->type == FILE_TYPE_DIRECTORY ? S_IFDIR : S_IFREG) );
+		bind_text(add_stmt,	":owner",		file->owner);
+		bind_text(add_stmt,	":group",		file->group);
 		bind_int(add_stmt,	":read_hits",	file->read_hits);
 		bind_int(add_stmt,	":write_hits",	file->write_hits);
 		//bind_int(add_stmt,	":type",		type);
@@ -781,13 +785,33 @@ int cache_update(const char *path, struct fuse_file_info *fi, kivfs_file_t *file
 void cache_update_read_hits(const char *path )
 {
 
+	pthread_mutex_lock( &update_read_hits_mutex );
+
+	bind_text(update_read_hits_stmt, ":path", path);
+
+	sqlite3_step( update_read_hits_stmt );
+
+	if( sqlite3_reset( update_read_hits_stmt ) != SQLITE_OK )
+	{
+		fprintf(stderr,"\033[31;1mcache_update_read_hits: faiulure%s\033[0;0m %s %d \n",  path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+	}
+	else
+	{
+		fprintf(stderr,"\033[35;1mcache_update_read_hits OK: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+	}
+
+	pthread_mutex_unlock( &update_read_hits_mutex );
 }
 
 void cache_update_write_hits(const char *path )
 {
+	pthread_mutex_lock( &update_write_hits_mutex );
+
+	bind_text(update_write_hits_stmt, ":path", path);
+
 	sqlite3_step( update_write_hits_stmt );
 
-	if( sqlite3_reset( update_stmt ) != SQLITE_OK )
+	if( sqlite3_reset( update_write_hits_stmt ) != SQLITE_OK )
 	{
 		fprintf(stderr,"\033[31;1mcache_update_write_hits: faiulure%s\033[0;0m %s %d \n",  path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
@@ -795,4 +819,6 @@ void cache_update_write_hits(const char *path )
 	{
 		fprintf(stderr,"\033[35;1mcache_update_write_hits OK: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
+
+	pthread_mutex_unlock( &update_write_hits_mutex );
 }

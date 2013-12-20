@@ -136,7 +136,7 @@ void prepare_cache_log(sqlite3_stmt **stmt, sqlite3 *db){
    	   	   	  If in Db exists conflicting entry with action KIVFS_WRITE, then
    	   	   	  move appends new destination to the same row.
 
-   	   	   	  If enrty has action KIVFS_TOUCH or KIVFS_MKDIR, then replaces
+   	   	   	  If entry has action KIVFS_TOUCH or KIVFS_MKDIR, then replaces
    	   	   	  path with new_path, so no move have to be done.
 
    	   	   	  The problem is when user do `mv a b` and then `mv b a`

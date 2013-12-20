@@ -97,10 +97,6 @@ static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			fprintf(stderr, "\033[33;1mkivfs remote readdir error");
 		}
 
-
-
-		//TODO cache_updatedir( files );
-
 		/* Read dir from cache, because user want to see all available files */
 		return cache_readdir(path, buf, filler);
 }
@@ -125,8 +121,9 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 	print_open_mode( fi->flags );
 
 	/* If WRONLY, don't check version, because file will be truncated anyway */
-	if ( fi->flags & O_WRONLY )
+	if ( fi->flags & (O_WRONLY | O_RDWR) )
 	{
+		/* There is not necessary check errors, because cache is used */
 		kivfs_remote_open(path, fi->flags, file);
 
 		//XXX: do while will be better
@@ -147,6 +144,8 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 		{
 			fprintf(stderr, "\033[34;1mkivfs_open: LOCAL OPEN OK  mode WRONLY\033[0m\n");
 		}
+
+		//XXX: nesedí verze na lokálu se serverem, na serveru je o 1 větší
 		cache_update_write_hits( path );
 	}
 
@@ -189,7 +188,7 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 			/* If file is NOT too large */
 			if ( file_info->size < get_cache_size() / 2 )
 			{
-				file->fd = open(full_path , fi->flags | O_RDWR | (access(full_path, F_OK) != 0 ? O_CREAT : 0), S_IRUSR | S_IWUSR ); /* Open if exists, or create in cache */
+				file->fd = open(full_path, fi->flags | O_RDWR | (access(full_path, F_OK) != 0 ? O_CREAT : 0), S_IRUSR | S_IWUSR ); /* Open if exists, or create in cache */
 
 				if ( file->fd == -1 )
 				{
@@ -208,6 +207,9 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 				{
 					fprintf(stderr, "\033[34;1mkivfs_open: LOCAL OPEN OK\033[0m\n");
 				}
+
+				/* set the right size for fgetattr, otherwise first read of uncached file will fail*/
+				ftruncate(file->fd, stbuf.st_size);
 			}
 
 			cache_update(path, fi, file_info);
@@ -233,7 +235,6 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 		kivfs_free_file( file_info );
 	}
 
-
 	free( full_path );
 
 	/* if some descriptor is set, then everything is OK */
@@ -243,13 +244,13 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 static int kivfs_read(const char *path, char *buf, size_t size,
 		off_t offset, struct fuse_file_info *fi){
 
-	ssize_t local_size;
+	ssize_t _size;
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
 	/* if no remote descriptor, then local is set */
 	if ( !file->r_fd )
 	{
-		local_size = pread(file->fd, buf, size, offset);
+		_size = pread(file->fd, buf, size, offset);
 	}
 	else
 	{
@@ -261,38 +262,21 @@ static int kivfs_read(const char *path, char *buf, size_t size,
 			size = stbuf.st_size - offset;
 		}
 
-		local_size = kivfs_remote_read(file, buf, size, offset);
+		_size = kivfs_remote_read(file, buf, size, offset);
 
 		/* if file can fit into cache */
 		if ( file->fd != -1 )
 		{
-			fprintf(stderr, "COPY to CACHE fd: %lu | size: %lu\n",file->fd, local_size);
-			fwrite(buf, 1, local_size, stderr);
-			if( pwrite(file->fd, buf, local_size, offset) <= 0 )
+			fprintf(stderr, "COPY to CACHE fd: %lu | _size: %lu | size: %lu\n",file->fd, _size, size);
+			fwrite(buf, 1, _size, stderr);
+			if ( pwrite(file->fd, buf, _size, offset) != _size )
 			{
 				perror("pwrite: ERRRRRRR");
 			}
 		}
 	}
 
-	/*if( local_size == -1 ){
-		int r_size;
-		struct stat stbuf;
-
-		cache_getattr(path, &stbuf);
-		//size = -errno;
-		printf("kivfs_read: r_fd: %lu size: %lu\n", file->r_fd, size);
-		if( file->r_fd ){
-
-			if( size + offset > stbuf.st_size ){
-				size = stbuf.st_size - offset;
-			}
-
-			r_size = kivfs_remote_read(file, buf, size, offset);
-		}
-	}*/
-
-	return size;
+	return _size;
 }
 
 static int kivfs_write(const char *path, const char *buf, size_t size,
@@ -358,6 +342,8 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 
 	fi->fh = (unsigned long)file;
 	memset(file, 0, sizeof(kivfs_ofile_t));
+
+	print_open_mode(mode);
 
 	file->fd = creat(full_path, mode);	// fi->fh pro rychlejší přístup, zatim k ničemu
 

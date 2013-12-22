@@ -21,6 +21,7 @@
 #include "connection.h"
 #include "tools.h"
 #include "kivfs_operations.h"
+#include "cleanup.h"
 
 #define concat(cache_path, path) { strcat(full_path, cache_path); strcat(full_path, path); }
 
@@ -68,10 +69,12 @@ static int kivfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file
 	{
 		fprintf(stderr,"\033[31;1m fgetarr %lu\n\033[0m", file->fd);
 		res = fstat(file->fd, stbuf);
+		fstat(file->fd, &file->stbuf);
 	}
-	else if ( file->r_fd )
+	else
 	{
 		res = cache_getattr(path, stbuf);
+		cache_getattr(path, &file->stbuf);
 	}
 
 	return res;
@@ -105,8 +108,6 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 {
 	kivfs_ofile_t *file;
 	char *full_path = get_full_path( path );
-	struct stat stbuf;
-	cache_getattr(path, &stbuf);
 
 	file = (kivfs_ofile_t *)malloc( sizeof( kivfs_ofile_t ) );
 
@@ -117,6 +118,8 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 
 	fi->fh = (unsigned long)file;
 	memset(file, 0, sizeof(kivfs_ofile_t));
+	file->fd = -1;
+	cache_getattr(path, &file->stbuf);
 
 	print_open_mode( fi->flags );
 
@@ -132,7 +135,7 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 		if ( file->fd == -1 )
 		{
 			/* Maybe some dirs are just in database */
-			file->fd = recreate_and_open(full_path, stbuf.st_mode);
+			file->fd = recreate_and_open(full_path, file->stbuf.st_mode);
 
 			if ( file->fd == -1 )
 			{
@@ -193,7 +196,7 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 				if ( file->fd == -1 )
 				{
 					/* Maybe some dirs are just in database */
-					file->fd = recreate_and_open(full_path, stbuf.st_mode);
+					file->fd = recreate_and_open(full_path, file->stbuf.st_mode);
 
 					if ( file->fd == -1 )
 					{
@@ -209,7 +212,17 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 				}
 
 				/* set the right size for fgetattr, otherwise first read of uncached file will fail*/
-				ftruncate(file->fd, stbuf.st_size);
+				ftruncate(file->fd, file->stbuf.st_size);
+
+
+				while ( cache_get_used_size() + file->stbuf.st_size > get_cache_size() )
+				{
+					fifo();
+					fprintf(stderr, "FIFO DONE DONE. File size %ld | used: %ld | cache_size: %ld\n", file->stbuf.st_size,cache_get_used_size(),get_cache_size());
+				}
+
+				fprintf(stderr, "CLEANUP DONE. File size %ld | used: %ld | cache_size: %ld\n", file->stbuf.st_size,cache_get_used_size(),get_cache_size());
+				cache_set_cached(path, 1);
 			}
 
 			cache_update(path, fi, file_info);
@@ -254,12 +267,8 @@ static int kivfs_read(const char *path, char *buf, size_t size,
 	}
 	else
 	{
-
-		struct stat stbuf;
-		cache_getattr(path, &stbuf);
-
-		if( size + offset > stbuf.st_size ){
-			size = stbuf.st_size - offset;
+		if( size + offset > file->stbuf.st_size ){
+			size = file->stbuf.st_size - offset;
 		}
 
 		_size = kivfs_remote_read(file, buf, size, offset);
@@ -274,7 +283,13 @@ static int kivfs_read(const char *path, char *buf, size_t size,
 				perror("pwrite: ERRRRRRR");
 			}
 		}
+		else
+		{
+			fprintf(stderr, "JUST REMOTE READ fd: %lu | _size: %lu | size: %lu\n", file->r_fd, _size, size);
+		}
 	}
+
+
 
 	return _size;
 }
@@ -345,7 +360,7 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 
 	print_open_mode(mode);
 
-	file->fd = creat(full_path, mode);	// fi->fh pro rychlejší přístup, zatim k ničemu
+	file->fd = creat(full_path, mode);
 
 	/* If create fails */
 	if ( file->fd == -1 )
@@ -369,6 +384,9 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 			//TODO check type of error
 			cache_log(path, NULL, KIVFS_TOUCH);
 		}
+
+		cache_set_cached(path, 1);
+
 		return 0;
 	}
 

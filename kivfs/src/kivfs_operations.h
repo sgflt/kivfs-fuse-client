@@ -20,6 +20,7 @@ typedef struct kivfs_ofile_st {
 	kivfs_connection_t connection;	/* connection to the fs layer			*/
 	pthread_mutex_t mutex;			/* connection can't be used parallel	*/
 	int write;						/* write flag							*/
+	struct stat stbuf;
 } kivfs_ofile_t; 					/* "opened file" type					*/
 
 /*---------------------------- CONSTANTS -----------------------------------*/

@@ -11,6 +11,7 @@
 
 #include <fuse.h>
 #include <sys/types.h>
+#include <sqlite3.h>
 
 #include "kivfs_operations.h"
 
@@ -21,8 +22,10 @@
 /*---------------------------- Variables -----------------------------------*/
 
 /*------------------- Functions: ANSI C prototypes -------------------------*/
-int cache_init();
-void cache_close();
+int cache_init( void );
+void cache_close( void );
+sqlite3 * cache_get_db( void );
+
 int cache_add(const char *path, kivfs_file_t *file);
 int cache_remove(const char *path);
 int cache_rename(const char *old_path, const char *new_path);
@@ -37,6 +40,8 @@ int cache_update(const char *path, struct fuse_file_info *fi, kivfs_file_t *file
 void cache_update_read_hits(const char *path );
 void cache_update_write_hits(const char *path );
 kivfs_version_t cache_get_version(const char * path );
+void cache_set_cached(const char *path, int cached);
+size_t cache_get_used_size( void );
 
 
 /*----------------------------- Macros -------------------------------------*/

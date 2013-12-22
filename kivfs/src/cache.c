@@ -39,6 +39,8 @@ sqlite3_stmt *update_stmt;
 sqlite3_stmt *get_version_stmt;
 sqlite3_stmt *update_read_hits_stmt;
 sqlite3_stmt *update_write_hits_stmt;
+sqlite3_stmt *set_cached_stmt;
+sqlite3_stmt *get_used_size_stmt;
 
 
 /* Each function can be processed without race condition */
@@ -55,6 +57,7 @@ pthread_mutex_t update_mutex;
 pthread_mutex_t get_version_mutex;
 pthread_mutex_t update_read_hits_mutex;
 pthread_mutex_t update_write_hits_mutex;
+pthread_mutex_t set_cached_mutex;
 
 
 
@@ -78,6 +81,8 @@ void prepare_statements(){
 	prepare_cache_get_version	(&get_version_stmt,	db);
 	prepare_cache_update_read_hits(&update_read_hits_stmt, db);
 	prepare_cache_update_write_hits(&update_write_hits_stmt, db);
+	prepare_cache_set_cached(&set_cached_stmt, db);
+	prepare_cache_get_used_size(&get_used_size_stmt, db);
 }
 
 void init_mutexes(){
@@ -94,6 +99,7 @@ void init_mutexes(){
 	pthread_mutex_init(&get_version_mutex,		NULL);
 	pthread_mutex_init(&update_read_hits_mutex,	NULL);
 	pthread_mutex_init(&update_write_hits_mutex,	NULL);
+	pthread_mutex_init(&set_cached_mutex,			NULL);
 }
 
 int cache_init(){
@@ -195,6 +201,9 @@ void cache_close(){
 	pthread_mutex_destroy( &sync_mutex );
 	pthread_mutex_destroy( &update_mutex );
 	pthread_mutex_destroy( &get_version_mutex );
+	pthread_mutex_destroy( &update_read_hits_mutex );
+	pthread_mutex_destroy( &update_write_hits_mutex );
+	pthread_mutex_destroy( &set_cached_mutex );
 
 	sqlite3_finalize( add_stmt );
 	sqlite3_finalize( rename_stmt );
@@ -208,8 +217,14 @@ void cache_close(){
 	sqlite3_finalize( get_version_stmt );
 	sqlite3_finalize( update_read_hits_stmt );
 	sqlite3_finalize( update_write_hits_stmt );
+	sqlite3_finalize( set_cached_stmt );
 
 	sqlite3_close( db );
+}
+
+sqlite3 * cache_get_db( void )
+{
+	return db;
 }
 
 int cache_add(const char *path, kivfs_file_t *file){
@@ -547,15 +562,15 @@ int cache_getattr(const char *path, struct stat *stbuf)
 
 	if ( sqlite3_reset( getattr_stmt ) == SQLITE_OK )
 	{
-		fprintf(stderr,"\033[31;1mCache getattr reset OK: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+		fprintf(stderr,"\033[34;1mCache getattr reset OK: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 	else
 	{
 		fprintf(stderr,"\033[31;1mCache getattr failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 
-	if(!res)
-	fprintf(stderr,"\033[31;1mCache getattr EXTREME failure: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+	if(res)
+		fprintf(stderr,"\033[31;1mCache getattr EXTREME failure: %s\033[0;0m %s err: %d | res: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ), res);
 
 	pthread_mutex_unlock( &getattr_mutex );
 	return res;
@@ -821,4 +836,48 @@ void cache_update_write_hits(const char *path )
 	}
 
 	pthread_mutex_unlock( &update_write_hits_mutex );
+}
+
+void cache_set_cached(const char *path, int cached)
+{
+	pthread_mutex_lock( &set_cached_mutex );
+
+	bind_text(set_cached_stmt, ":path", path);
+	bind_int(set_cached_stmt, ":cached", cached);
+
+	sqlite3_step( set_cached_stmt );
+
+	if( sqlite3_reset( set_cached_stmt ) != SQLITE_OK )
+	{
+		fprintf(stderr,"\033[31;1mcache_update_write_hits: faiulure%s\033[0;0m %s %d \n",  path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+	}
+	else
+	{
+		fprintf(stderr,"\033[35;1mcache_update_write_hits OK: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+	}
+
+	pthread_mutex_unlock( &set_cached_mutex );
+}
+
+size_t cache_get_used_size( void )
+{
+	size_t size = 0;
+
+	//if( sqlite3_step( get_used_size_stmt ) == SQLITE_ROW )
+	fprintf(stderr,"\033[33;1mresult %d \n\033[0m",sqlite3_step( get_used_size_stmt ));
+	{
+		size = sqlite3_column_int(get_used_size_stmt, 0);
+		fprintf(stderr,"\033[33;1msize: %lu \n\033[0m", size);
+	}
+
+	if( sqlite3_reset( get_used_size_stmt ) != SQLITE_OK )
+	{
+		fprintf(stderr,"\033[31;1mcache_get_used_size: faiulure \033[0;0m %s  %d \n", sqlite3_errmsg( db ), sqlite3_errcode( db ));
+	}
+	else
+	{
+		fprintf(stderr,"\033[35;1mcache_get_used_size OK: size: %ld \033[0;0m %s err: %d\n", size, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+	}
+
+	return size;
 }

@@ -17,7 +17,7 @@
 
 void prepare_cache_add(sqlite3_stmt **stmt, sqlite3 *db){
 //TODO INSERT OR REPLACE ale nesmí se nahradit, když je v lokálu starší verzem jinak by to hlásilo aktuální a četla by se stará
-	char *sql = 	"INSERT OR REPLACE INTO files(path, size, mtime, atime, mode, own, grp, read_hits, write_hits, version)"
+	char *sql = 	"INSERT INTO files(path, size, mtime, atime, mode, own, grp, read_hits, write_hits, version)"
 					"VALUES(:path, :size, :mtime, :atime, :mode, :owner, :group, :read_hits, :write_hits, :version)";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
@@ -288,7 +288,7 @@ void prepare_cache_update_read_hits(sqlite3_stmt **stmt, sqlite3 *db)
 
 void prepare_cache_update_write_hits(sqlite3_stmt **stmt, sqlite3 *db)
 {
-	char *sql = 	"UPDATE files SET version = version + 1, write_hits = write_hits + 1 WHERE path LIKE :path ";
+	char *sql = 	"UPDATE files SET write_hits = write_hits + 1 WHERE path LIKE :path ";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
 		fprintf(stderr,"\033[31;1mprepare_cache_write_hits:\033[0;0m %s\n", sqlite3_errmsg( db ));
@@ -317,4 +317,15 @@ void prepare_cache_get_used_size(sqlite3_stmt **stmt, sqlite3 *db)
 	}
 	else
 		fprintf(stderr,"\033[33;1mprepare_get_used_size:\033[0;0m %s\n", sqlite3_errmsg( db ));
+}
+
+void prepare_cache_update_version(sqlite3_stmt **stmt, sqlite3 *db)
+{
+	char *sql = 	"UPDATE files SET version = version + 1 WHERE path LIKE :path ";
+
+	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
+		fprintf(stderr,"\033[31;1mprepare_cache_write_hits:\033[0;0m %s\n", sqlite3_errmsg( db ));
+	}
+	else
+		fprintf(stderr,"\033[33;1mprepare_cache_write_hits:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }

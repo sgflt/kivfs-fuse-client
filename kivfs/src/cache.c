@@ -41,7 +41,7 @@ sqlite3_stmt *update_read_hits_stmt;
 sqlite3_stmt *update_write_hits_stmt;
 sqlite3_stmt *set_cached_stmt;
 sqlite3_stmt *get_used_size_stmt;
-
+sqlite3_stmt *update_version_stmt;
 
 /* Each function can be processed without race condition */
 pthread_mutex_t add_mutex;
@@ -58,7 +58,7 @@ pthread_mutex_t get_version_mutex;
 pthread_mutex_t update_read_hits_mutex;
 pthread_mutex_t update_write_hits_mutex;
 pthread_mutex_t set_cached_mutex;
-
+pthread_mutex_t update_version_mutex;
 
 
 
@@ -83,6 +83,7 @@ void prepare_statements(){
 	prepare_cache_update_write_hits(&update_write_hits_stmt, db);
 	prepare_cache_set_cached(&set_cached_stmt, db);
 	prepare_cache_get_used_size(&get_used_size_stmt, db);
+	prepare_cache_update_version(&update_version_stmt, db);
 }
 
 void init_mutexes(){
@@ -100,6 +101,7 @@ void init_mutexes(){
 	pthread_mutex_init(&update_read_hits_mutex,	NULL);
 	pthread_mutex_init(&update_write_hits_mutex,	NULL);
 	pthread_mutex_init(&set_cached_mutex,			NULL);
+	pthread_mutex_init(&update_version_mutex,			NULL);
 }
 
 int cache_init(){
@@ -147,7 +149,7 @@ int cache_init(){
 			    "read_hits 		INT NOT NULL DEFAULT ('0'),"
 				"write_hits 	INT NOT NULL DEFAULT ('0'),"
 				"cached 		INT NOT NULL DEFAULT ('0'),"
-				"version 		TEXT NOT NULL)",
+				"version 		INT NOT NULL)",
 			    NULL,
 			    NULL,
 			    NULL
@@ -204,6 +206,7 @@ void cache_close(){
 	pthread_mutex_destroy( &update_read_hits_mutex );
 	pthread_mutex_destroy( &update_write_hits_mutex );
 	pthread_mutex_destroy( &set_cached_mutex );
+	pthread_mutex_destroy( &update_version_mutex );
 
 	sqlite3_finalize( add_stmt );
 	sqlite3_finalize( rename_stmt );
@@ -218,6 +221,7 @@ void cache_close(){
 	sqlite3_finalize( update_read_hits_stmt );
 	sqlite3_finalize( update_write_hits_stmt );
 	sqlite3_finalize( set_cached_stmt );
+	sqlite3_finalize( update_version_stmt );
 
 	sqlite3_close( db );
 }
@@ -230,8 +234,6 @@ sqlite3 * cache_get_db( void )
 int cache_add(const char *path, kivfs_file_t *file){
 
 	int res;
-
-
 
 	if( file ){
 		char tmp[4096]; //XXX: unsafe
@@ -824,7 +826,7 @@ void cache_update_write_hits(const char *path )
 
 	bind_text(update_write_hits_stmt, ":path", path);
 
-	sqlite3_step( update_write_hits_stmt );
+	sqlite3_step( update_version_stmt );
 
 	if( sqlite3_reset( update_write_hits_stmt ) != SQLITE_OK )
 	{
@@ -880,4 +882,41 @@ size_t cache_get_used_size( void )
 	}
 
 	return size;
+}
+
+int cache_contains(const char *path)
+{
+	int cached = 0;
+	sqlite3_stmt *stmt;
+
+	sqlite3_prepare_v2(db, "SELECT count(*) FROm files WHERE cached = 1 LIMIT 1", ZERO_TERMINATED, &stmt, NULL);
+
+	if( sqlite3_step( stmt ) == SQLITE_ROW )
+	{
+		cached = 1;
+	}
+
+	sqlite3_finalize( stmt );
+
+	return cached;
+}
+
+void cache_update_version(const char*path)
+{
+	pthread_mutex_lock( &update_version_mutex );
+
+	bind_text(update_version_stmt, ":path", path);
+
+	sqlite3_step( update_version_stmt );
+
+	if( sqlite3_reset( update_version_stmt ) != SQLITE_OK )
+	{
+		fprintf(stderr,"\033[31;1mcache_update_version: faiulure%s\033[0;0m %s %d \n",  path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+	}
+	else
+	{
+		fprintf(stderr,"\033[35;1mcache_update_version OK: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+	}
+
+	pthread_mutex_unlock( &update_version_mutex );
 }

@@ -33,4 +33,6 @@ void fifo(void)
 	{
 		fprintf(stderr, "\033[34;1mFile NOT removed from cache\n	\033[0m");
 	}
+
+	sqlite3_finalize( stmt );
 }

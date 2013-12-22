@@ -24,7 +24,7 @@
 #include "cleanup.h"
 
 #define concat(cache_path, path) { strcat(full_path, cache_path); strcat(full_path, path); }
-
+#define CONFLICT ".conflict"
 
 static int kivfs_getattr(const char *path, struct stat *stbuf)
 {
@@ -92,7 +92,35 @@ static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		{
 			for (kivfs_adt_item_t *item = files->first; item != NULL; item = item->next)
 			{
-				cache_add(path, item->data);
+				if( cache_add(path, item->data) != KIVFS_OK )
+				{
+					kivfs_version_t version = cache_get_version( path );
+
+					fprintf(stderr, "\033[33;1mFILE exists in database\n\t remote version: %llu | local version: %d\n\033[0m",((kivfs_file_t *)(item->data))->version, version);
+
+					if ( version != ((kivfs_file_t *)(item->data))->version )
+					{
+						fprintf(stderr, "\033[33;1mFILE has different version\n\033[0m");
+
+						char *new_full_path;
+						char *new_path = (char *)malloc(strlen(path) + strlen(CONFLICT) + 1);
+						char *full_path = get_full_path( path );
+
+
+						strcat(new_path, path);
+						strcat(new_path, CONFLICT);
+
+						new_full_path = get_full_path( new_path );
+
+						rename(full_path, new_full_path);
+						cache_rename(path, new_path);
+
+						free( new_path );
+						free( new_full_path );
+
+						cache_add(path, item->data);
+					}
+				}
 			}
 		}
 		else
@@ -171,7 +199,7 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 		fprintf(stderr, "remote version: %llu, local version: %d\n", file_info->version, cache_get_version( path ));
 
 		/* if local file is older than remote or doesn't exist */
-		if ( file_info->version != cache_get_version( path ) || access(full_path, F_OK) != 0 )
+		if ( file_info->version > cache_get_version( path ) || access(full_path, F_OK) != 0 )
 		{
 			fprintf(stderr, "\033[34;1mRemote file is newer, local will be replaced.\033[0m\n");
 
@@ -215,7 +243,8 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 				ftruncate(file->fd, file->stbuf.st_size);
 
 
-				while ( cache_get_used_size() + file->stbuf.st_size > get_cache_size() )
+				/* if a file is already in cache, w don't have to do more space */
+				while ( !cache_contains(path) && cache_get_used_size() + file->stbuf.st_size > get_cache_size() )
 				{
 					fifo();
 					fprintf(stderr, "FIFO DONE DONE. File size %ld | used: %ld | cache_size: %ld\n", file->stbuf.st_size,cache_get_used_size(),get_cache_size());
@@ -444,6 +473,8 @@ static int kivfs_release(const char *path, struct fuse_file_info *fi)
 		if ( file->fd != -1 )
 		{
 			cache_update(path, fi, NULL);
+			cache_update_version( path );
+			fprintf(stderr, "FILE VERSION updated\n");
 		}
 
 		/* big from server */
@@ -682,7 +713,7 @@ struct fuse_operations kivfs_operations = {
 	.readdir	= kivfs_readdir,
 	.open		= kivfs_open,
 	.read		= kivfs_read,
-	//.access		= kivfs_access,
+	.access		= kivfs_access,
 	.write		= kivfs_write,
 	.create		= kivfs_create,
 	.release	= kivfs_release,

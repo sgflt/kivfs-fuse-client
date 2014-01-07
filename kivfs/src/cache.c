@@ -777,7 +777,7 @@ int cache_update(const char *path, struct fuse_file_info *fi, kivfs_file_t *file
 		bind_int(update_stmt,	":size",		file_info->size);
 		bind_int(update_stmt,	":mtime",		file_info->mtime);
 		bind_int(update_stmt,	":atime",		file_info->atime);
-		bind_int(update_stmt,	":mode",		mode);
+		bind_int(update_stmt,	":mode",		mode | (file_info->type == FILE_TYPE_DIRECTORY ? S_IFDIR : S_IFREG));
 		bind_int(update_stmt,	":version",		file_info->version);
 
 	}

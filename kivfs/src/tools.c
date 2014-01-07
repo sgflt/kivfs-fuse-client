@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <kivfs.h>
 
 int mkdirs(const char *path){
 
@@ -105,4 +106,34 @@ void print_open_mode(int mode)
 	if ( mode & O_TRUNC)
 		fprintf(stderr,"\n\033[33;1m\tmode: O_TRUNC\033[0;0m\n");
 
+}
+
+
+int kivfs2unix_err(int error)
+{
+	switch ( error )
+	{
+		case KIVFS_OK:
+			return KIVFS_OK;
+
+		case KIVFS_ERC_FILE_LOCKED:
+			return 	EMFILE;
+
+		case KIVFS_ERC_CONNECTION_TERMINATED:
+			return ENOTCONN;
+
+		case KIVFS_ERC_NO_SUCH_DIR:
+		case KIVFS_ERC_NO_SUCH_FILE:
+			return ENOENT;
+
+		case KIVFS_ERC_FILE_EXISTS:
+		case KIVFS_ERC_DIR_EXISTS:
+			return EEXIST;
+
+		case KIVFS_ERC_DIR_NOT_EMPTY:
+			return ENOTEMPTY;
+
+		default:
+			return KIVFS_ERC_UNKNOWN_ERROR_CODE;
+	}
 }

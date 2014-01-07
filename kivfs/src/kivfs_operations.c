@@ -21,6 +21,7 @@
 #include "connection.h"
 #include "tools.h"
 #include "kivfs_operations.h"
+#include "kivfs_remote_operations.h"
 #include "cleanup.h"
 
 #define concat(cache_path, path) { strcat(full_path, cache_path); strcat(full_path, path); }
@@ -98,6 +99,7 @@ static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 					fprintf(stderr, "\033[33;1mFILE exists in database\n\t remote version: %llu | local version: %d\n\033[0m",((kivfs_file_t *)(item->data))->version, version);
 
+					/* This is buggy as hell
 					if ( version != ((kivfs_file_t *)(item->data))->version )
 					{
 						fprintf(stderr, "\033[33;1mFILE has different version\n\033[0m");
@@ -106,6 +108,7 @@ static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 						char *new_path = (char *)malloc(strlen(path) + strlen(CONFLICT) + 1);
 						char *full_path = get_full_path( path );
 
+						*new_path = 0;
 
 						strcat(new_path, path);
 						strcat(new_path, CONFLICT);
@@ -119,7 +122,7 @@ static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 						free( new_full_path );
 
 						cache_add(path, item->data);
-					}
+					}*/
 				}
 			}
 		}
@@ -243,7 +246,7 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 				ftruncate(file->fd, file->stbuf.st_size);
 
 
-				/* if a file is already in cache, w don't have to do more space */
+				/* if a file is already in cache, we don't have to do more space */
 				while ( !cache_contains(path) && cache_get_used_size() + file->stbuf.st_size > get_cache_size() )
 				{
 					fifo();
@@ -347,26 +350,6 @@ static int kivfs_write(const char *path, const char *buf, size_t size,
 		fprintf(stderr, "kivfs_write: LOCAL WRITE %ld bytes %lu\n", _size, (size_t)_size);
 	}
 
-	/*ssize_t local_size;
-	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
-
-	local_size = pwrite(file->fd, buf, size, offset);
-
-	if( local_size == -1 ){
-
-		//size = -errno;
-	}
-
-	printf("kivfs_write: r_fd: %lu\n", file->r_fd);
-	if( file->r_fd ){
-
-		 ssize_t remote_size;
-
-		remote_size = kivfs_remote_write(file, buf, size, offset);
-
-		file->write = 1;
-		size = remote_size;
-	}*/
 
 	fprintf(stderr, "kivfs_write: TOTAL WRITE %ld bytes %lu\n", _size, (size_t)_size);
 	return _size == -1 ? -errno : _size;
@@ -498,7 +481,6 @@ static int kivfs_release(const char *path, struct fuse_file_info *fi)
 
 static int kivfs_truncate(const char *path, off_t size)
 {
-	int res;
 	char *full_path = get_full_path( path );
 
 	truncate(full_path, size);
@@ -524,7 +506,7 @@ static int kivfs_ftruncate(const char *path, off_t size, struct fuse_file_info *
 	}
 
 	/* Write will also truncate */
-	cache_log(path, NULL, KIVFS_WRITE);
+	//cache_log(path, NULL, KIVFS_WRITE);
 
 	return 0;
 }
@@ -540,6 +522,8 @@ static int kivfs_rename(const char *old_path, const char *new_path)
 		rename(full_old_path, full_new_path);
 		cache_log(old_path, new_path, KIVFS_MOVE);
 		//TODO remote rename or set SYNC + action
+
+		kivfs_remote_rename(old_path, new_path);
 
 		free( full_new_path );
 		free( full_old_path );
@@ -626,22 +610,29 @@ static int kivfs_rmdir(const char *path)
 	// FLAG_AS_REMOVED + SYNC || DELETE
 	if ( !cache_remove( path ) )
 	{
+		int res;
 		char *full_path = get_full_path( path );
 
 		/* If a directory contains files, then rmdir will fail */
-		rmdir( full_path );
+		res = rmdir( full_path );
 		free( full_path );
 
+		/* rmdir may fail too if we are removing remote directory, this case we should ignore */
+		if( res && errno != ENOENT )
+		{
+			return res;
+		}
 
 
-		/* Log rmdir  */
+		res = kivfs_remote_rmdir( path );
+		/* Only empty directory can be logged */
+		if ( res != KIVFS_OK && res != KIVFS_ERC_DIR_NOT_EMPTY )
+		{
+			/* Log rmdir  */
+			cache_log(path, NULL, KIVFS_RMDIR);
+		}
 
-		cache_log(path, NULL, KIVFS_RMDIR);
-
-		/* Upload action if possible */
-		cache_sync();
-
-		return KIVFS_OK;
+		return res;
 	}
 
 	return -ENOENT;
@@ -669,7 +660,11 @@ static int kivfs_chmod(const char *path, mode_t mode)
 
 	chmod(full_path, mode);
 	cache_chmod(path, mode);
-	cache_log(path, NULL, KIVFS_CHMOD);
+
+	if( kivfs_remote_chmod(path, mode) != KIVFS_OK )
+	{
+		cache_log(path, NULL, KIVFS_CHMOD);
+	}
 
 	free( full_path );
 	return 0;

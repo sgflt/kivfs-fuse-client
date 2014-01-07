@@ -550,17 +550,29 @@ int kivfs_lock(const char *path, struct fuse_file_info *fi, int cmd, struct floc
 
 static int kivfs_unlink(const char *path)
 {
-	//TODO remote remove and add second parameter for cache_remove
-	// FLAG_AS_REMOVED + SYNC || DELETE
 	if ( !cache_remove( path ) )
 	{
+		int res;
 		char *full_path = get_full_path( path );
 
-		cache_log(path, NULL, KIVFS_UNLINK);
-		unlink( full_path );
+		res = unlink( full_path );
 		free( full_path );
-		cache_sync();
-		return 0;
+
+		/* file can exist only in db, so ignore ENOENT */
+		if( res && errno != ENOENT )
+		{
+			return res;
+		}
+
+		res = kivfs_remote_unlink( path );
+
+		if ( res != KIVFS_OK && kivfs2unix_err( res ) != ENOENT )
+		{
+			cache_log(path, NULL, KIVFS_UNLINK);
+			return KIVFS_OK;
+		}
+
+		return kivfs2unix_err( res );
 	}
 
 	return -ENOENT;
@@ -632,7 +644,7 @@ static int kivfs_rmdir(const char *path)
 			cache_log(path, NULL, KIVFS_RMDIR);
 		}
 
-		return res;
+		return -kivfs2unix_err( res );
 	}
 
 	return -ENOENT;

@@ -44,11 +44,11 @@ clean:
 	-$(RM) $(OBJDIR) $(BINDIR)
 	-@echo ' '
 
-libinstall:
-	@sudo apt-get install e2fslibs-dev libssl-dev libkrb5 heimdal-dev libsqlite3-dev
+dependents:
+	@sudo apt-get install libfuse-dev libssl-dev libsqlite3-dev pkg-config
 	
 
-.PHONY: all clean dependents kivfs libinstall
+.PHONY: all clean dependents kivfs
 .SECONDARY:
 
 -include ../makefile.targets

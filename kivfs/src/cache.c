@@ -746,8 +746,6 @@ int cache_updatedir(kivfs_list_t *files)
 
 int cache_update(const char *path, struct fuse_file_info *fi, kivfs_file_t *file_info)
 {
-
-	struct stat stbuf;
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
 	pthread_mutex_lock( & update_mutex );
@@ -757,13 +755,14 @@ int cache_update(const char *path, struct fuse_file_info *fi, kivfs_file_t *file
 	/* update from local file */
 	if( file_info == NULL )
 	{
-		fstat(file->fd, &stbuf);
 		bind_text(update_stmt,	":path",	path);
-		bind_int(update_stmt,	":size",	stbuf.st_size);
-		bind_int(update_stmt,	":mtime",	stbuf.st_mtim.tv_sec);
-		bind_int(update_stmt,	":atime",	stbuf.st_atim.tv_sec);
+		bind_int(update_stmt,	":size",	file->stbuf.st_size);
+		bind_int(update_stmt,	":mtime",	file->stbuf.st_mtim.tv_sec);
+		bind_int(update_stmt,	":atime",	file->stbuf.st_atim.tv_sec);
+		bind_int(update_stmt,	":mode",	file->stbuf.st_mode);
+		bind_int(update_stmt,	":version",	cache_get_version(path));
 
-		fprintf(stderr, "UPDATE FROM CACHE size %lu\n", stbuf.st_size);
+		fprintf(stderr, "UPDATE FROM CACHE size %lu\n", file->stbuf.st_size);
 	}
 	else
 	{

@@ -22,6 +22,12 @@ kivfs_server_t *get_server();
 char * get_cache_path();
 char * get_full_path(const char *path);
 size_t get_cache_size();
+int get_retry_count(void);
+int is_connected(void);
+void set_retry_count(int count);
+void decrease_retry_count(void);
+void set_is_connected(int status);
+void set_server_ip(const char *ip);
 /*----------------------------- Macros -------------------------------------*/
 
 

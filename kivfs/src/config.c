@@ -19,23 +19,60 @@ kivfs_server_t server = {
 		.id = 0,
 		.name = "zcu",
 		.priority = 0,
-		.public_ip = "147.228.63.46",
+		.public_ip = "192.168.2.14", //147.228.63.46 147.228.63.47 147.228.63.48 147.228.67.121
 };
 
 kivfs_client_t  *client = NULL;
 
+int retry_count = 0;
 
-kivfs_server_t *get_server(){
+int connection_status = 0;
+
+kivfs_server_t * get_server(void)
+{
 	return &server;
 }
 
-char * get_cache_path(){
+char * get_cache_path(void)
+{
 	return cache_path;
 }
 
-size_t get_cache_size()
+size_t get_cache_size(void)
 {
 	return 128;
+}
+
+int get_retry_count(void)
+{
+	return retry_count;
+}
+
+int is_connected(void)
+{
+	return connection_status;
+}
+
+void set_retry_count(int count)
+{
+	retry_count = count;
+}
+
+void decrease_retry_count(void)
+{
+	retry_count--;
+}
+
+void set_is_connected(int status)
+{
+	connection_status = status;
+}
+
+
+void set_server_ip(const char *ip)
+{
+	fprintf(stderr, "Setting new server IP %s\n", ip);
+	server.public_ip = strdup( ip ); //XXX: posible memoryleak
 }
 
 /*----------------------------------------------------------------------------

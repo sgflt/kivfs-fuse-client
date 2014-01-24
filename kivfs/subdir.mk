@@ -2,6 +2,8 @@
 C_SRCS += \
 ./src/main.c \
 ./src/kivfs_operations.c \
+./src/kivfs_remote_operations.c \
+./src/kivfs_open_handling.c \
 ./src/config.c \
 ./src/cache.c \
 ./src/prepared_stmts.c \
@@ -12,6 +14,8 @@ C_SRCS += \
 OBJS += \
 $(OBJDIR)/main.o \
 $(OBJDIR)/kivfs_operations.o \
+$(OBJDIR)/kivfs_remote_operations.o \
+$(OBJDIR)/kivfs_open_handling.o \
 $(OBJDIR)/config.o \
 $(OBJDIR)/cache.o \
 $(OBJDIR)/prepared_stmts.o \
@@ -22,6 +26,8 @@ $(OBJDIR)/cleanup.o
 C_DEPS += \
 main.d \
 kivfs_operations.d \
+kivfs_remote_operations.d \
+kivfs_open_handling.d \
 config.d \
 cache.d \
 prepared_stmts.d \
@@ -33,7 +39,7 @@ cleanup.d
 # Each subdirectory must supply rules for building sources it contributes
 ./obj/%.o: ./src/%.c
 	@echo 'Building file: $<'
-	@echo 'Invoking: C Compiler'
+	@echo 'Invoking: C Comoiler'
 	$(CC) -O0 -ggdb3 -Wall -pedantic -c -fmessage-length=0 `pkg-config fuse sqlite3 libssl --cflags` -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '

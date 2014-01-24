@@ -1,0 +1,9 @@
+INSTALATION
+	The newest version of KIVFS-FUSe client have NOT an instalator.
+
+COMPILING
+	kivfs library have to be installed in standard location /usr/lib or /usr/local/lib
+	Then just run make dependents && make in root of this project.
+	
+RUNNING
+	./bin/kivfs <mount path> -s -d

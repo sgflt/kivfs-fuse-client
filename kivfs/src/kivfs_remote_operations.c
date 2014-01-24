@@ -12,6 +12,7 @@
 #include "config.h"
 #include "kivfs_operations.h"
 #include "kivfs_remote_operations.h"
+#include "connection.h"
 
 #define KIVFS_USR(mode) (((mode) >> 6) & 07)
 #define KIVFS_GRP(mode) (((mode) >> 3) & 07)
@@ -48,6 +49,10 @@ int kivfs_remote_file_info(const char * path, kivfs_file_t **file)
 
 	fprintf(stderr,"\033[33;1mDownloading file info %s\033[0m\n", path);
 
+	if ( !is_connected() )
+	{
+		return -ENOTCONN;
+	}
 
 	res = kivfs_send_and_receive(
 			&connection,
@@ -85,6 +90,11 @@ int kivfs_remote_file_info(const char * path, kivfs_file_t **file)
 				printf("\033[33;1mFile not unpacked!\033[0m");
 			}
 		}
+	}
+
+	if ( res == KIVFS_ERC_CONNECTION_TERMINATED || res == KIVFS_ERC_NETWORK_ERROR )
+	{
+		kivfs_restore_connnection();
 	}
 
 	kivfs_free_msg( response );
@@ -292,6 +302,10 @@ int kivfs_remote_readdir(const char *path, kivfs_list_t **files){
 	int res;
 	kivfs_msg_t *response;
 
+	if ( !is_connected() )
+	{
+		return -ENOTCONN;
+	}
 
 	/* Send READDIR request */
 	res = kivfs_send_and_receive(
@@ -321,7 +335,7 @@ int kivfs_remote_readdir(const char *path, kivfs_list_t **files){
 	return res;
 }
 
-int kivfs_remote_sync(const char *path, const char *new_path, KIVFS_VFS_COMMAND action){
+int kivfs_remote_sync(const char *path, const void *path_or_mode, KIVFS_VFS_COMMAND action){
 
 	switch( action ){
 		case KIVFS_MKDIR:
@@ -333,14 +347,14 @@ int kivfs_remote_sync(const char *path, const char *new_path, KIVFS_VFS_COMMAND 
 		case KIVFS_TOUCH:
 			return kivfs_remote_touch( path );
 
-		//case KIVFS_WRITE:
-		//	return kivfs_remote_write();
-
-		//case KIVFS_CHMOD:
-		//	return kivfs_remote_chmod();
+		case KIVFS_CHMOD:
+			return kivfs_remote_chmod(path, (mode_t)path_or_mode);
 
 		case KIVFS_UNLINK:
 			return kivfs_remote_unlink( path );
+
+		case KIVFS_MOVE:
+			return kivfs_remote_rename(path, path_or_mode);
 
 		default:
 			return -ENOSYS;
@@ -560,9 +574,14 @@ int kivfs_remote_create(const char *path, mode_t mode, kivfs_ofile_t *file){
 
 	int res;
 
+	if ( !is_connected() )
+	{
+		return -ENOTCONN;
+	}
+
 	res = kivfs_remote_touch( path );
 
-	if( !res ){
+	if( !res && file ){
 		res = kivfs_remote_open(path, O_RDWR, file);
 	}
 
@@ -620,11 +639,10 @@ int kivfs_remote_write(kivfs_ofile_t *file, const char *buf, size_t size,
 	kivfs_msg_t *response;
 	ssize_t bytes_sent;
 
-	/*XXXres = kivfs_remote_fseek(file, offset);
-
-	if( res ){
-		return res;
-	}*/
+	if ( !is_connected() )
+	{
+		return -ENOTCONN;
+	}
 
 	fprintf(stderr,"file: %p r_fd: %lu\n size: %lu\n", file, file->r_fd, size);
 	pthread_mutex_lock( &file->mutex );

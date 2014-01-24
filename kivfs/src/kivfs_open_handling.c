@@ -80,26 +80,29 @@ void open_local_copy(const char *path, kivfs_ofile_t *file, int flags)
 void open_file(const char *path, kivfs_ofile_t *file,  struct fuse_file_info *fi)
 {
 	int res;
+	int file_exists;
 	kivfs_file_t *file_info = NULL;
 	char *full_path = get_full_path( path );
 
 	res = kivfs_remote_file_info(path, &file_info);
 
-	/* Some error on server side occured */
-	if ( res )
+	/* Some error on server side occured, but we ignore connection err or mising remote file */
+	if ( res && res != -ENOTCONN && res != KIVFS_ERC_NO_SUCH_FILE)
 	{
 		//XXX: handle error and remove deleted file from db
 		fprintf(stderr, "\033[34;1mkivfs_open: REMOTE FILE INFO, abort open %d\033[0m\n", res);
 		return;
 	}
 
-	fprintf(stderr, "remote version: %llu, local version: %d\n", file_info->version, cache_get_version( path ));
+	fprintf(stderr, "remote version: %llu, local version: %d\n", file_info ? file_info->version : -1, cache_get_version( path ));
 
-	/* if local file is older than remote or doesn't exist */
-	if ( file_info->version > cache_get_version( path ) || access(full_path, F_OK) != 0 )
+	file_exists = access(full_path, F_OK) == 0;
+	free( full_path );
+
+	/* if local file is older than remote or doesn't exist and online*/
+	if ( file_info && (file_info->version > cache_get_version( path ) || !file_exists) )
 	{
 		fprintf(stderr, "\033[34;1mRemote file is newer, local will be replaced.\033[0m\n");
-		free( full_path );
 
 		res = kivfs_remote_open(path, fi->flags, file);
 
@@ -119,7 +122,7 @@ void open_file(const char *path, kivfs_ofile_t *file,  struct fuse_file_info *fi
 		if ( file_info->size < get_cache_size() / 2 )
 		{
 			file->stbuf.st_size = file_info->size; /* copy new size to proper truncation in cache */
-			open_with_cache(path, file, fi->flags | O_RDWR | (access(full_path, F_OK) != 0 ? O_CREAT : 0));
+			open_with_cache(path, file, fi->flags | O_RDWR | (!file_exists ? O_CREAT : 0));
 			cache_set_cached(path, 1);
 		}
 

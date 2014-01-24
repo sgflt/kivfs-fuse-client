@@ -22,6 +22,7 @@
 #include "tools.h"
 #include "kivfs_operations.h"
 #include "kivfs_remote_operations.h"
+#include "kivfs_open_handling.h"
 #include "cleanup.h"
 
 #define concat(cache_path, path) { strcat(full_path, cache_path); strcat(full_path, path); }
@@ -70,12 +71,12 @@ static int kivfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file
 	{
 		fprintf(stderr,"\033[31;1m fgetarr %lu\n\033[0m", file->fd);
 		res = fstat(file->fd, stbuf);
-		fstat(file->fd, &file->stbuf);
+		memcpy(&file->stbuf, stbuf, sizeof(struct stat));
 	}
 	else
 	{
 		res = cache_getattr(path, stbuf);
-		cache_getattr(path, &file->stbuf);
+		memcpy(&file->stbuf, stbuf, sizeof(struct stat));
 	}
 
 	return res;
@@ -155,135 +156,23 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 	print_open_mode( fi->flags );
 
 	/* If WRONLY, don't check version, because file will be truncated anyway */
-	if ( fi->flags & (O_WRONLY | O_RDWR) )
+	if ( fi->flags & O_WRONLY )
 	{
-		/* There is not necessary check errors, because cache is used */
-		kivfs_remote_open(path, fi->flags, file);
-
-		//XXX: do while will be better
-		file->fd = open(full_path, fi->flags | (access(full_path, F_OK) != 0 ? O_CREAT : 0), S_IRUSR | S_IWUSR ); /* Open if exists, or create in cache */
-
-		if ( file->fd == -1 )
-		{
-			/* Maybe some dirs are just in database */
-			file->fd = recreate_and_open(full_path, file->stbuf.st_mode);
-
-			if ( file->fd == -1 )
-			{
-				fprintf(stderr, "\033[33;1mkivfs_open: LOCAL OPEN FAILED mode WRONLY\033[0m\n");
-				return -ENOENT;
-			}
-		}
-		else
-		{
-			fprintf(stderr, "\033[34;1mkivfs_open: LOCAL OPEN OK  mode WRONLY\033[0m\n");
-		}
-
-		//XXX: nesedí verze na lokálu se serverem, na serveru je o 1 větší
+		open_file_wronly(path, file, fi->flags);
 		cache_update_write_hits( path );
 	}
 
 	/* READ_ONLY or RDWR. Remote file is copied into cache. */
 	else
 	{
-		int res;
-		kivfs_file_t *file_info = NULL;
-
-		res = kivfs_remote_file_info(path, &file_info);
-
-		/* Some error on server side occured */
-		if ( res )
-		{
-			//XXX: handle error and remove deleted file from db
-			fprintf(stderr, "\033[34;1mkivfs_open: REMOTE FILE INFO, abort open %d\033[0m\n", res);
-			return res;
-		}
-
-		fprintf(stderr, "remote version: %llu, local version: %d\n", file_info->version, cache_get_version( path ));
-
-		/* if local file is older than remote or doesn't exist */
-		if ( file_info->version > cache_get_version( path ) || access(full_path, F_OK) != 0 )
-		{
-			fprintf(stderr, "\033[34;1mRemote file is newer, local will be replaced.\033[0m\n");
-
-
-			res = kivfs_remote_open(path, fi->flags, file);
-
-			if ( res )
-			{
-				fprintf(stderr, "\033[34;1mkivfs_open: REMOTE OPEN FAILED %d\033[0m\n", res);
-				return res;
-			}
-			else
-			{
-				fprintf(stderr, "\033[34;1mkivfs_open: REMOTE OPEN OK\033[0m\n");
-			}
-
-			/* If file is NOT too large */
-			if ( file_info->size < get_cache_size() / 2 )
-			{
-				file->fd = open(full_path, fi->flags | O_RDWR | (access(full_path, F_OK) != 0 ? O_CREAT : 0), S_IRUSR | S_IWUSR ); /* Open if exists, or create in cache */
-
-				if ( file->fd == -1 )
-				{
-					/* Maybe some dirs are just in database */
-					file->fd = recreate_and_open(full_path, file->stbuf.st_mode);
-
-					if ( file->fd == -1 )
-					{
-						fprintf(stderr, "\033[33;1mkivfs_open: LOCAL OPEN FAILED\033[0m\n");
-						return -ENOENT;
-					}
-					fprintf(stderr, "\033[33;1mkivfs_open: LOCAL OPEN FAILED\033[0m\n");
-					perror("File creation failed");
-				}
-				else
-				{
-					fprintf(stderr, "\033[34;1mkivfs_open: LOCAL OPEN OK\033[0m\n");
-				}
-
-				/* set the right size for fgetattr, otherwise first read of uncached file will fail*/
-				ftruncate(file->fd, file->stbuf.st_size);
-
-
-				/* if a file is already in cache, we don't have to do more space */
-				while ( !cache_contains(path) && cache_get_used_size() + file->stbuf.st_size > get_cache_size() )
-				{
-					fifo();
-					fprintf(stderr, "FIFO DONE DONE. File size %ld | used: %ld | cache_size: %ld\n", file->stbuf.st_size,cache_get_used_size(),get_cache_size());
-				}
-
-				fprintf(stderr, "CLEANUP DONE. File size %ld | used: %ld | cache_size: %ld\n", file->stbuf.st_size,cache_get_used_size(),get_cache_size());
-				cache_set_cached(path, 1);
-			}
-
-			cache_update(path, fi, file_info);
-		}
-
-		/* local file is up to date, we don't need to open remote file */
-		else
-		{
-			fprintf(stderr, "Local file is up to date.\n");
-
-			file->fd = open(full_path , fi->flags); /* Open if exists, or create in cache */
-			if ( file->fd == -1 )
-			{
-				fprintf(stderr, "\033[33;1mkivfs_open: LOCAL OPEN FAILED\033[0m\n");
-			}
-			else
-			{
-				fprintf(stderr, "\033[34;1mkivfs_open: LOCAL OPEN OK\033[0m\n");
-			}
-		}
-
+		open_file(path, file, fi);
 		cache_update_read_hits( path );
-		kivfs_free_file( file_info );
 	}
 
 	free( full_path );
 
 	/* if some descriptor is set, then everything is OK */
-	return file->fd == -1 && file->r_fd == 0 ? -ENOENT : KIVFS_OK;
+	return file->fd == -1 && file->r_fd == 0 ? -errno : KIVFS_OK;
 }
 
 static int kivfs_read(const char *path, char *buf, size_t size,
@@ -338,18 +227,15 @@ static int kivfs_write(const char *path, const char *buf, size_t size,
 		fprintf(stderr, "kivfs_write: REMOTE WRITE %ld bytes\n", _size);
 	}
 
-	/* set log flag */
-	else
+	/* remote connection can be lost and _size contains -ENOTCONN, but we can still write into cache */
+	if ( file->fd != -1 && (_size == size || !is_connected()) )
 	{
-		file->write = 1;
-	}
-
-	if ( file->fd != -1 && _size == size )
-	{
-		_size = pwrite(file->fd, buf, _size, offset);
+		_size = pwrite(file->fd, buf, size, offset);
 		fprintf(stderr, "kivfs_write: LOCAL WRITE %ld bytes %lu\n", _size, (size_t)_size);
 	}
 
+	/* set write flag */
+	file->write = 1;
 
 	fprintf(stderr, "kivfs_write: TOTAL WRITE %ld bytes %lu\n", _size, (size_t)_size);
 	return _size == -1 ? -errno : _size;
@@ -429,34 +315,33 @@ static int kivfs_release(const char *path, struct fuse_file_info *fi)
 	//TODO: odeslat změny na server
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
+
 	if ( file->fd != -1 )
 	{
+		fstat(file->fd, &file->stbuf); /* update file info for cache_update */
 		close( file->fd );
+		fprintf(stderr, "Local file %lu CLOSED\n", file->fd);
 	}
 
 	if ( file->r_fd )
 	{
 		if ( kivfs_remote_close( file ) )
 		{
-			fprintf(stderr, "Error: Close remote file");
+			fprintf(stderr, "Error: Close remote file\n");
 		}
 		else
 		{
-			fprintf(stderr, "File CLOSED");
+			fprintf(stderr, "Remote file CLOSED\n");
 		}
 	}
 
 	//TODO BIGFILE
 	if ( file->write )
 	{
-		//cache_log(path, NULL, KIVFS_WRITE);
-		//cache_sync();
-
 		/* small file update from cache */
 		if ( file->fd != -1 )
 		{
 			cache_update(path, fi, NULL);
-			cache_update_version( path );
 			fprintf(stderr, "FILE VERSION updated\n");
 		}
 
@@ -469,10 +354,18 @@ static int kivfs_release(const char *path, struct fuse_file_info *fi)
 			cache_update(path, fi, file_info);
 			kivfs_free_file( file_info );
 		}
-		/*printf("SLEEP\n");
-		sleep(10);
-		printf("SLEEP END\n");*/
-		//kivfs_put_from_cache( path );
+
+		if ( !is_connected() )
+		{
+			fprintf(stderr, "File %s marked as modified\n", path);
+			cache_set_modified(path, 1); /* mark a file for synchronisation */
+		}
+		else
+		{
+			fprintf(stderr, "Version of a %s updated\n", path);
+			cache_update_version( path ); /* just update version because file is already synchronised */
+			cache_update_version( path );
+		}
 	}
 
 	free( file );
@@ -491,7 +384,7 @@ static int kivfs_truncate(const char *path, off_t size)
 	}*/
 
 	/* Write will also truncate */
-	cache_log(path, NULL, KIVFS_WRITE);
+	//cache_log(path, NULL, KIVFS_WRITE);
 
 	return 0;
 }
@@ -607,8 +500,11 @@ static int kivfs_mkdir(const char *path, mode_t mode)
 
 	if ( !cache_add(path, NULL) )
 	{
-		cache_log(path, NULL, KIVFS_MKDIR);
-		cache_sync();
+		if ( !kivfs_remote_mkdir( path ) || !kivfs_remote_chmod(path, mode) )
+		{
+			cache_log(path, NULL, KIVFS_MKDIR);
+		}
+
 		return 0;
 	}
 
@@ -618,8 +514,6 @@ static int kivfs_mkdir(const char *path, mode_t mode)
 
 static int kivfs_rmdir(const char *path)
 {
-	//TODO remote remove and add second parameter for cache_remove
-	// FLAG_AS_REMOVED + SYNC || DELETE
 	if ( !cache_remove( path ) )
 	{
 		int res;
@@ -694,7 +588,7 @@ static void kivfs_destroy(void * ptr)
 	//TODO
 
 	cache_close();
-	kivfs_session_disconnect();
+	kivfs_session_destroy();
 
 	fprintf(stderr, "ALL OK\n");
 }

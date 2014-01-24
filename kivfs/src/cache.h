@@ -41,6 +41,7 @@ void cache_update_read_hits(const char *path );
 void cache_update_write_hits(const char *path );
 kivfs_version_t cache_get_version(const char * path );
 void cache_set_cached(const char *path, int cached);
+void cache_set_modified(const char *path, int status);
 size_t cache_get_used_size( void );
 int cache_contains(const char *path);
 void cache_update_version(const char*path);

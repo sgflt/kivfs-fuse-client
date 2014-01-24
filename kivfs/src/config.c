@@ -12,6 +12,8 @@
 #include "config.h"
 
 
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
 /* Path should be shorter than PATH_MAX */
 static char *cache_path = "/tmp/fusetmp"; //TODO: nastavit v init
 
@@ -48,9 +50,22 @@ int get_retry_count(void)
 	return retry_count;
 }
 
+pthread_mutex_t * get_mutex(void)
+{
+	return &mutex;
+}
+
 int is_connected(void)
 {
-	return connection_status;
+	int status;
+
+	pthread_mutex_lock( &mutex );
+	{
+		status = connection_status;
+	}
+	pthread_mutex_unlock( &mutex );
+
+	return status;
 }
 
 void set_retry_count(int count)
@@ -65,7 +80,11 @@ void decrease_retry_count(void)
 
 void set_is_connected(int status)
 {
-	connection_status = status;
+	pthread_mutex_lock( &mutex );
+	{
+		connection_status = status;
+	}
+	pthread_mutex_unlock( &mutex );
 }
 
 

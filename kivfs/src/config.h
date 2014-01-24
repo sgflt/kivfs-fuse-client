@@ -23,6 +23,7 @@ char * get_cache_path();
 char * get_full_path(const char *path);
 size_t get_cache_size();
 int get_retry_count(void);
+pthread_mutex_t * get_mutex(void);
 int is_connected(void);
 void set_retry_count(int count);
 void decrease_retry_count(void);

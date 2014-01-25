@@ -1,7 +1,21 @@
 
 -include ../makefile.init
 
-RM := rm -rf
+# Parameters necessary for creating a debian package
+VERSION = 0.2
+DEBPREFIX = kivfs-fuse
+TMP = /tmp
+SNDBOX = $(TMP)/$(DEBPREFIX)-$(VERSION)
+ARCHIVE = $(DEBPREFIX)-$(VERSION).tar.bz2
+ORIG = $(DEBPREFIX)-$(VERSION).orig.tar.bz2
+
+# install directories
+BIN = $(DESTDIR)/usr/bin
+MAN = $(DESTDIR)/usr/share/man
+
+
+# local build
+RM = rm -rf
 CC = clang
 OBJDIR = ./obj
 BINDIR = ./bin
@@ -46,9 +60,34 @@ clean:
 
 dependents:
 	@sudo apt-get install libfuse-dev libssl-dev libsqlite3-dev pkg-config
-	
 
-.PHONY: all clean dependents kivfs
+# Some environment variables are necessary for propper configuration:	
+#	export DEBEMAIL - email of package maintainer
+#	export DEBFULLNAME - name of maintainer
+deb: $(SNDBOX) $(TMP)/$(ARCHIVE)
+	cd $(SNDBOX); \
+	dh_make -c gpl3 -f ../$(ARCHIVE); \
+	rm debian/*.{ex,EX}; \
+	debuild -us -uc	
+
+$(TMP)/$(ARCHIVE):
+	cp -r ./src ./makefile ./*.mk  $(SNDBOX) # copy source files
+	cd $(TMP); \
+	tar -cjvf $(ARCHIVE) $(DEBPREFIX)-$(VERSION) # create upstream archive from sandbox
+		
+	
+$(SNDBOX):
+	mkdir $(SNDBOX)
+
+debclean:
+	$(RM) $(SNDBOX) $(TMP)/$(ARCHIVE) $(TMP)/$(ORIG)
+	
+install: all
+	cd $(SNDBOX); \
+	install -d -m 644 $(BIN); \
+	install -s -m 755 $(BINDIR)/kivfs $(BIN)
+
+.PHONY: all clean dependents kivfs install deb
 .SECONDARY:
 
 -include ../makefile.targets

@@ -242,7 +242,7 @@ int cache_add(const char *path, kivfs_file_t *file)
 		fprintf(stderr," %d %d %d %o\n"
 				"file type: %d\n"
 				"path: %s\n"
-				"version: %llu\n",
+				"version: %lu\n",
 				file->acl->owner,
 				file->acl->group,
 				file->acl->other,
@@ -741,6 +741,7 @@ void cache_sync_modified()
 			}
 			else if( !res )
 			{
+				fprintf(stderr, "File is up to date on the server from now!\n");
 				cache_set_modified(path, 0);
 			}
 
@@ -893,7 +894,7 @@ void cache_update_write_hits(const char *path )
 
 	bind_text(update_write_hits_stmt, ":path", path);
 
-	sqlite3_step( update_version_stmt );
+	sqlite3_step( update_write_hits_stmt );
 
 	if( sqlite3_reset( update_write_hits_stmt ) != SQLITE_OK )
 	{
@@ -995,11 +996,7 @@ void cache_update_version(const char *path)
 
 	bind_text(update_version_stmt, ":path", path);
 
-
-	if( sqlite3_step( update_version_stmt ) != SQLITE_DONE)
-	{
-		fprintf(stderr,"\033[31;1mcache_update_version: faiulure%s\033[0;0m %s %d \n",  path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
-	}
+	sqlite3_step( update_version_stmt );
 
 	if( sqlite3_reset( update_version_stmt ) != SQLITE_OK )
 	{

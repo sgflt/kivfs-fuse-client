@@ -14,12 +14,16 @@
 
 /*---------------------------- Structures ----------------------------------*/
 
+#define KIVFS_FLG_WR 1
+#define KIVFS_FLG_ERR 1 << 1
+
 typedef struct kivfs_ofile_st {
 	unsigned long fd;				/* local file descriptor				*/
 	unsigned long r_fd;			/* remote file descriptor				*/
 	kivfs_connection_t connection;	/* connection to the fs layer			*/
 	pthread_mutex_t mutex;			/* connection can't be used parallel	*/
-	int write;						/* write flag							*/
+	int flags;						/* flags						*/
+
 	struct stat stbuf;
 } kivfs_ofile_t; 					/* "opened file" type					*/
 

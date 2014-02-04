@@ -227,15 +227,20 @@ static int kivfs_write(const char *path, const char *buf, size_t size,
 		fprintf(stderr, "kivfs_write: REMOTE WRITE %ld bytes\n", _size);
 	}
 
+	if (_size != size )
+	{
+		file->flags |= KIVFS_FLG_ERR;
+	}
+
 	/* remote connection can be lost and _size contains -ENOTCONN, but we can still write into cache */
-	if ( file->fd != -1 && (_size == size || !is_connected()) )
+	if ( file->fd != -1 )
 	{
 		_size = pwrite(file->fd, buf, size, offset);
 		fprintf(stderr, "kivfs_write: LOCAL WRITE %ld bytes %lu\n", _size, (size_t)_size);
 	}
 
 	/* set write flag */
-	file->write = 1;
+	file->flags |= KIVFS_FLG_WR;
 
 	fprintf(stderr, "kivfs_write: TOTAL WRITE %ld bytes %lu\n", _size, (size_t)_size);
 	return _size == -1 ? -errno : _size;
@@ -336,13 +341,13 @@ static int kivfs_release(const char *path, struct fuse_file_info *fi)
 	}
 
 	//TODO BIGFILE
-	if ( file->write )
+	if ( file->flags & KIVFS_FLG_WR )
 	{
 		/* small file update from cache */
 		if ( file->fd != -1 )
 		{
 			cache_update(path, fi, NULL);
-			fprintf(stderr, "FILE VERSION updated\n");
+			fprintf(stderr, "FILE attributes updated\n");
 		}
 
 		/* big from server */
@@ -355,7 +360,7 @@ static int kivfs_release(const char *path, struct fuse_file_info *fi)
 			kivfs_free_file( file_info );
 		}
 
-		if ( !is_connected() )
+		if ( (file->flags & KIVFS_FLG_ERR) || !is_connected() )
 		{
 			fprintf(stderr, "File %s marked as modified\n", path);
 			cache_set_modified(path, 1); /* mark a file for synchronisation */

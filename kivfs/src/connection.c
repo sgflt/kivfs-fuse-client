@@ -16,7 +16,6 @@
 #include "config.h"
 #include "cache.h"
 
-
 pthread_t rescuer_thr;
 pthread_cond_t try_connect = PTHREAD_COND_INITIALIZER;
 
@@ -37,6 +36,7 @@ void * kivfs_reconnect(void *args)
 	for (;;)
 	{
 		if ( kivfs_connect(&connection, 1) != KIVFS_OK )
+		//if ( kivfs_connect_to(&connection.socket, connection.ip, connection.port, 1) != KIVFS_OK )
 		{
 			set_retry_count( 9000 );
 			set_is_connected( 0 );
@@ -48,6 +48,7 @@ void * kivfs_reconnect(void *args)
 			kivfs_login("root", "\0");
 
 			set_is_connected( 1 );
+			fprintf(stderr, "LOGGED as root");
 			cache_sync();
 			pthread_cond_wait(&try_connect, get_mutex());
 		}
@@ -56,53 +57,11 @@ void * kivfs_reconnect(void *args)
 	return NULL;
 }
 
-
-/* should be in libkivfs.so */
-int kivfs_connect(kivfs_connection_t *connection, int attempts)
-{
-	/*int opt;
-	struct in_addr addr;
-	struct sockaddr_in srv_addr;
-	struct timeval delay;
-
-	connection->socket = socket(AF_INET, SOCK_STREAM, 0);
-
-	addr.s_addr = inet_addr( connection->ip );
-	srv_addr.sin_family = AF_INET;
-	srv_addr.sin_addr = addr;
-	srv_addr.sin_port = htons( connection->port );
-
-	delay.tv_sec = 1;
-	delay.tv_usec = 0;
-
-	opt = 1;
-
-	if ( !setsockopt( connection->socket, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof(opt)) )
-	{
-		fprintf(stderr, "kivfs_connect: SO_KEEPALIVE FAILED\n");
-	}
-
-	if ( !setsockopt( connection->socket, SOL_SOCKET, SO_RCVTIMEO, &delay, sizeof(delay)) )
-	{
-		fprintf(stderr, "kivfs_connect: SO_RCVTIMEO FAILED\n");
-	}
-
-	fcntl(connection->socket, F_SETFL, O_NONBLOCK);
-
-	if ( connect(connection->socket, (struct sockaddr*)&srv_addr, sizeof(srv_addr)) )
-	{
-		perror("connection failed");
-	}
-
-	return 0;*/
-	return kivfs_connect_to(&connection->socket, connection->ip, connection->port, attempts);
-}
-
 int kivfs_login(const char *username, const char *password){
 
 	int res;
-	kivfs_msg_t *response;
-	kivfs_client_t *client;
+	kivfs_msg_t *response = NULL;
+	kivfs_client_t *client = NULL;
 
 	res = kivfs_send_and_receive(
 			&connection,
@@ -148,6 +107,10 @@ int kivfs_login(const char *username, const char *password){
 
 int kivfs_session_init()
 {
+    /*--- 1st step: Initializing the SSL Library */
+    SSL_library_init(); /* load encryption & hash algorithms for SSL */
+    SSL_load_error_strings(); /* load the error strings for good error reporting */
+
 	kivfs_set_connection(&connection, get_server()->public_ip, 30003);
 	kivfs_print_connection( &connection );
 
@@ -158,7 +121,7 @@ int kivfs_session_init()
 
 void kivfs_session_destroy()
 {
-	kivfs_disconnect(connection.socket);
+	kivfs_disconnect_v2(&connection);
 	//TODO close all conections on files
 }
 

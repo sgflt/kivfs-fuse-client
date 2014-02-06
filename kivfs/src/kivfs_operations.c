@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <kivfs.h>
 #include <ulockmgr.h>
+#include <inttypes.h>
 
 #include "config.h"
 #include "cache.h"
@@ -98,7 +99,7 @@ static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 				{
 					kivfs_version_t version = cache_get_version( path );
 
-					fprintf(stderr, "\033[33;1mFILE exists in database\n\t remote version: %llu | local version: %d\n\033[0m",((kivfs_file_t *)(item->data))->version, version);
+					fprintf(stderr, "\033[33;1mFILE exists in database\n\t remote version: %" PRIu64 " | local version: %d\n\033[0m",((kivfs_file_t *)(item->data))->version, version);
 
 					/* This is buggy as hell
 					if ( version != ((kivfs_file_t *)(item->data))->version )
@@ -141,7 +142,7 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 	kivfs_ofile_t *file;
 	char *full_path = get_full_path( path );
 
-	file = (kivfs_ofile_t *)malloc( sizeof( kivfs_ofile_t ) );
+	file = (kivfs_ofile_t *)calloc(1, sizeof( kivfs_ofile_t ));
 
 	if ( !file )
 	{
@@ -149,8 +150,6 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 	}
 
 	fi->fh = (unsigned long)file;
-	memset(file, 0, sizeof(kivfs_ofile_t));
-	file->fd = -1;
 	cache_getattr(path, &file->stbuf);
 
 	print_open_mode( fi->flags );
@@ -186,7 +185,7 @@ static int kivfs_read(const char *path, char *buf, size_t size,
 	{
 		_size = pread(file->fd, buf, size, offset);
 	}
-	else
+	else if( !(file->flags & KIVFS_FLG_ERR) )
 	{
 		if( size + offset > file->stbuf.st_size ){
 			size = file->stbuf.st_size - offset;
@@ -221,16 +220,16 @@ static int kivfs_write(const char *path, const char *buf, size_t size,
 	ssize_t _size = 0;
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
-	if ( file->r_fd )
+	if ( file->r_fd  && !(file->flags & KIVFS_FLG_ERR) )
 	{
 		_size = kivfs_remote_write(file, buf, size, offset);
 		fprintf(stderr, "kivfs_write: REMOTE WRITE %ld bytes\n", _size);
+		if ( _size != size )
+		{
+			file->flags |= KIVFS_FLG_ERR;
+		}
 	}
 
-	if (_size != size )
-	{
-		file->flags |= KIVFS_FLG_ERR;
-	}
 
 	/* remote connection can be lost and _size contains -ENOTCONN, but we can still write into cache */
 	if ( file->fd != -1 )
@@ -251,7 +250,7 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 	kivfs_ofile_t *file;
 	char *full_path = get_full_path( path );
 
-	file = (kivfs_ofile_t *)malloc( sizeof( kivfs_ofile_t ) );
+	file = (kivfs_ofile_t *)calloc(1, sizeof( kivfs_ofile_t ));
 
 	if ( !file )
 	{
@@ -259,7 +258,6 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 	}
 
 	fi->fh = (unsigned long)file;
-	memset(file, 0, sizeof(kivfs_ofile_t));
 
 	print_open_mode(mode);
 
@@ -369,7 +367,6 @@ static int kivfs_release(const char *path, struct fuse_file_info *fi)
 		{
 			fprintf(stderr, "Version of a %s updated\n", path);
 			cache_update_version( path ); /* just update version because file is already synchronised */
-			cache_update_version( path );
 		}
 	}
 
@@ -554,10 +551,9 @@ static int kivfs_rmdir(const char *path)
 
 static int kivfs_utimens(const char *path, const struct timespec tv[2])
 {
-	int res;
 	char *full_path = get_full_path( path );
 
-	res = utimensat(0, full_path, tv, AT_SYMLINK_NOFOLLOW);
+	utimensat(0, full_path, tv, AT_SYMLINK_NOFOLLOW);
 
 	free( full_path );
 	return 0; // Don't worry about ENOENT

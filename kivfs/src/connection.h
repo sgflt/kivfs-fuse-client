@@ -26,11 +26,10 @@
 
 int kivfs_session_init();
 int kivfs_login(const char *username, const char *password);
-int kivfs_connect(kivfs_connection_t *connection, int attempts);
 void kivfs_session_destroy();
 void kivfs_restore_connnection(void);
 
 /*----------------------------- Macros -------------------------------------*/
-
+#define kivfs_send_and_receive kivfs_send_and_receive_v2
 
 #endif /* CONNECTION_H_ */

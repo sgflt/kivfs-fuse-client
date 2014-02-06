@@ -8,6 +8,7 @@
  ---------------------------------------------------------------------------*/
 
 #include <fuse.h>
+#include <inttypes.h>
 
 #include "kivfs_operations.h"
 #include "kivfs_remote_operations.h"
@@ -94,7 +95,7 @@ void open_file(const char *path, kivfs_ofile_t *file,  struct fuse_file_info *fi
 		return;
 	}
 
-	fprintf(stderr, "remote version: %llu, local version: %d\n", file_info ? file_info->version : -1, cache_get_version( path ));
+	fprintf(stderr, "remote version: %" PRIu64 ", local version: %d\n", file_info ? file_info->version : -1, cache_get_version( path ));
 
 	file_exists = access(full_path, F_OK) == 0;
 	free( full_path );

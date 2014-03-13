@@ -21,6 +21,13 @@
 int mkdirs(const char *path);
 int recreate_and_open(const char *path, mode_t mode);
 void print_open_mode(int mode);
+
+/**
+ * Convert kivfs error codes to unix standard errors.
+ * @param error kivfs error code
+ * @return unix error code
+ * @see kivfs-constants.h
+ */
 int kivfs2unix_err(int error);
 
 /*----------------------------- Macros -------------------------------------*/

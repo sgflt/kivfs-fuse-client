@@ -24,9 +24,26 @@
 /*------------------- Functions: ANSI C prototypes -------------------------*/
 
 
-int kivfs_session_init();
-int kivfs_login(const char *username, const char *password);
-void kivfs_session_destroy();
+/**
+ * Initialises online session - SSL encryption and recovery thread.
+ */
+void kivfs_session_init(void);
+
+/**
+ * Proceed log in with given username and password.
+ * @param username username
+ * @param password password
+ */
+void kivfs_login(const char *username, const char *password);
+
+/**
+ * Free all resources at the end of session.
+ */
+void kivfs_session_destroy(void);
+
+/**
+ * Send a signal to the recovery thread, which is probably sleeping.
+ */
 void kivfs_restore_connnection(void);
 
 /*----------------------------- Macros -------------------------------------*/

@@ -13,15 +13,27 @@
 
 /*---------------------------- Structures ----------------------------------*/
 
+typedef struct kivfs_cfile_st {
+	uint64_t r_hits;
+	uint64_t w_hits;
+	char *path;
+} kivfs_cfile_t;
+
 /*---------------------------- CONSTANTS -----------------------------------*/
 
 /*---------------------------- Variables -----------------------------------*/
 
 /*------------------- Functions: ANSI C prototypes -------------------------*/
 
-void fifo(void);
+/**
+ * Clean old files from cache.
+ * @param size how many bytes have to be clean.
+ * @return 0 if cache is clean, -1 otherwise
+ */
+int cleanup(const size_t size);
 
 /*----------------------------- Macros -------------------------------------*/
 
 
 #endif /* CLEANUP_H_ */
+

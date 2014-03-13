@@ -18,10 +18,33 @@
 /*---------------------------- Variables -----------------------------------*/
 
 /*------------------- Functions: ANSI C prototypes -------------------------*/
-kivfs_server_t *get_server();
-char * get_cache_path();
+
+/**
+ * Obtain server configuration.
+ * @return server config
+ */
+kivfs_server_t *get_server(void);
+
+/**
+ * Get actual path to cache.
+ * @return path to cache
+ */
+char * get_cache_path(void);
+
+/**
+ * Concatenate kivfs path and cache path.
+ * @param path kivfs path
+ * @return path to file in cache
+ */
 char * get_full_path(const char *path);
+
+/**
+ * Obtain maximum size of cache.
+ * @return size of cache
+ */
 size_t get_cache_size();
+
+
 int get_retry_count(void);
 pthread_mutex_t * get_mutex(void);
 int is_connected(void);

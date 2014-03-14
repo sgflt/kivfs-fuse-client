@@ -17,20 +17,19 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 /* Path should be shorter than PATH_MAX */
 static char *cache_path = "/tmp/fusetmp"; //TODO: nastavit v init
 
-kivfs_server_t server = {
-		.id = 0,
-		.name = "zcu",
-		.priority = 0,
-		.public_ip = "192.168.2.14", //147.228.63.46 147.228.63.47 147.228.63.48 147.228.67.121
+static kivfs_connection_t server = {
+		.ip ="192.168.2.14",
+		.port = 30003,
+		.socket = 0,
+
 };
 
-kivfs_client_t  *client = NULL;
 
 int retry_count = 0;
 
 int connection_status = 0;
 
-kivfs_server_t * get_server(void)
+kivfs_connection_t * get_server(void)
 {
 	return &server;
 }
@@ -91,7 +90,13 @@ void set_is_connected(int status)
 void set_server_ip(const char *ip)
 {
 	fprintf(stderr, "Setting new server IP %s\n", ip);
-	server.public_ip = strdup( ip ); //XXX: posible memoryleak
+	server.ip = strdup( ip ); //XXX: posible memoryleak
+}
+
+void set_server_port(const char *port)
+{
+	fprintf(stderr, "Setting new server PORT %s\n", port);
+	server.port = atol( port );
 }
 
 /*----------------------------------------------------------------------------

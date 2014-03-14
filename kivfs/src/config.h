@@ -23,7 +23,7 @@
  * Obtain server configuration.
  * @return server config
  */
-kivfs_server_t *get_server(void);
+kivfs_connection_t *get_server(void);
 
 /**
  * Get actual path to cache.
@@ -52,6 +52,7 @@ void set_retry_count(int count);
 void decrease_retry_count(void);
 void set_is_connected(int status);
 void set_server_ip(const char *ip);
+void set_server_port(const char *port);
 /*----------------------------- Macros -------------------------------------*/
 
 

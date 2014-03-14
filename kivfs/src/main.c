@@ -20,7 +20,8 @@
 
 enum{
 	KEY_HELP,
-	KEY_IP
+	KEY_IP,
+	KEY_PORT
 };
 
 int kivfs_opt_proc(void *data, const char *arg, int key, struct fuse_args *outargs){
@@ -37,6 +38,14 @@ int kivfs_opt_proc(void *data, const char *arg, int key, struct fuse_args *outar
 				arg++;
 			}
 			set_server_ip( ++arg );
+			return EXIT_SUCCESS;
+
+		case KEY_PORT:
+			while ( arg && *arg != '=' )
+			{
+				arg++;
+			}
+			set_server_port( ++arg );
 			return EXIT_SUCCESS;
 
 		default:
@@ -89,6 +98,8 @@ int main(int argc, char **argv){
 	     FUSE_OPT_KEY("-h",		KEY_HELP),
 	     FUSE_OPT_KEY("--help",	KEY_HELP),
 	     FUSE_OPT_KEY("--ip=%s",	KEY_IP),
+	     FUSE_OPT_KEY("--host=%s",	KEY_IP),
+	     FUSE_OPT_KEY("--port=%i",	KEY_PORT),
 	     FUSE_OPT_END
 	};
 

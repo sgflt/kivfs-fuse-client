@@ -10,6 +10,7 @@
 #include <fuse.h>
 #include <inttypes.h>
 
+#include "main.h"
 #include "kivfs_operations.h"
 #include "kivfs_remote_operations.h"
 #include "kivfs_open_handling.h"
@@ -18,18 +19,28 @@
 #include "cleanup.h"
 #include "tools.h"
 
+
+/**
+ * Open file in cache and set proper size. If cache is full, the clean up is started.
+ * @param path path to the file
+ * @param file empty ofile structure
+ * @param flags flags for opening
+ */
+static void open_with_cache(const char *path, kivfs_ofile_t *file,  int flags);
+
 void open_file_wronly(const char *path, kivfs_ofile_t *file, int flags)
 {
-	/* There is not necessary check errors, because cache is used */
+
 	if( is_connected() )
 	{
+		/* There is not necessary check errors, because cache is used */
 		kivfs_remote_open(path, flags, file);
 	}
 
 	open_local_copy(path, file, flags);
 }
 
-void open_with_cache(const char *path, kivfs_ofile_t *file,  int flags)
+static void open_with_cache(const char *path, kivfs_ofile_t *file,  int flags)
 {
 	open_local_copy(path, file, flags);
 
@@ -38,13 +49,15 @@ void open_with_cache(const char *path, kivfs_ofile_t *file,  int flags)
 
 
 	/* if a file is already in cache, we don't have to do more space */
-	while ( !cache_contains(path) && cache_get_used_size() + file->stbuf.st_size > get_cache_size() )
+	if ( !cache_contains(path) )
 	{
-		fifo();
-		fprintf(stderr, "FIFO DONE DONE. File size %ld | used: %ld | cache_size: %ld\n", file->stbuf.st_size,cache_get_used_size(),get_cache_size());
+		if ( cleanup( file->stbuf.st_size ) == KIVFS_OK )
+		{
+			fprintf(stderr, VT_INFO "FIFO DONE DONE. File size %ld | used: %ld | cache_size: %ld\n" VT_NORMAL, file->stbuf.st_size,cache_get_used_size(),get_cache_size());
+		}
 	}
 
-	fprintf(stderr, "CLEANUP DONE. File size %ld | used: %ld | cache_size: %ld\n", file->stbuf.st_size,cache_get_used_size(),get_cache_size());
+	fprintf(stderr, VT_INFO "CLEANUP DONE. File size %ld | used: %ld | cache_size: %ld\n" VT_NORMAL, file->stbuf.st_size,cache_get_used_size(),get_cache_size());
 
 }
 
@@ -65,13 +78,13 @@ void open_local_copy(const char *path, kivfs_ofile_t *file, int flags)
 
 		if ( file->fd == -1 )
 		{
-			fprintf(stderr, "\033[33;1mkivfs_open: LOCAL OPEN FAILED\033[0m\n");
+			fprintf(stderr, VT_ERROR "kivfs_open: LOCAL OPEN FAILED\n" VT_NORMAL);
 			//return -ENOENT;
 		}
 	}
 	else
 	{
-		fprintf(stderr, "\033[34;1mkivfs_open: LOCAL OPEN OK\033[0m\n");
+		fprintf(stderr, VT_OK "kivfs_open: LOCAL OPEN OK | fd: %" PRIu64 "\n" VT_NORMAL, file->fd);
 	}
 
 	free( full_path );
@@ -86,16 +99,28 @@ void open_file(const char *path, kivfs_ofile_t *file,  struct fuse_file_info *fi
 	char *full_path = get_full_path( path );
 
 	res = kivfs_remote_file_info(path, &file_info);
+	file->fd = -1; /* error state */
 
 	/* Some error on server side occured, but we ignore connection err or mising remote file */
-	if ( res && res != -ENOTCONN && res != KIVFS_ERC_NO_SUCH_FILE)
+	switch ( res )
 	{
-		//XXX: handle error and remove deleted file from db
-		fprintf(stderr, "\033[34;1mkivfs_open: REMOTE FILE INFO, abort open %d\033[0m\n", res);
-		return;
+		case KIVFS_OK:
+			/* fall through */
+
+		case -ENOTCONN:
+			break;
+
+		case KIVFS_ERC_NO_SUCH_FILE:
+			cache_remove( path );
+			return;
+
+		default:
+			//XXX: handle error and remove deleted file from db
+			fprintf(stderr, VT_ERROR "kivfs_open: REMOTE FILE INFO, abort open %d\n" VT_NORMAL, res);
+			return;
 	}
 
-	fprintf(stderr, "remote version: %" PRIu64 ", local version: %d\n", file_info ? file_info->version : -1, cache_get_version( path ));
+	fprintf(stderr, VT_INFO "remote version: %" PRIu64 ", local version: %d\n" VT_NORMAL, file_info ? file_info->version : -1, cache_get_version( path ));
 
 	file_exists = access(full_path, F_OK) == 0;
 	free( full_path );
@@ -103,20 +128,20 @@ void open_file(const char *path, kivfs_ofile_t *file,  struct fuse_file_info *fi
 	/* if local file is older than remote or doesn't exist and online*/
 	if ( file_info && (file_info->version > cache_get_version( path ) || !file_exists) )
 	{
-		fprintf(stderr, "\033[34;1mRemote file is newer, local will be replaced.\033[0m\n");
+		fprintf(stderr, VT_YELLOW "Remote file is newer or missing, local will be replaced.\n" VT_NORMAL);
 
 		res = kivfs_remote_open(path, fi->flags, file);
 
 		if ( res )
 		{
-			fprintf(stderr, "\033[34;1mkivfs_open: REMOTE OPEN FAILED %d\033[0m\n", res);
+			fprintf(stderr, VT_ERROR "kivfs_open: REMOTE OPEN FAILED %d\n" VT_NORMAL, res);
 			kivfs_free_file( file_info );
 			errno = -res;
 			return;
 		}
 		else
 		{
-			fprintf(stderr, "\033[34;1mkivfs_open: REMOTE OPEN OK\033[0m\n");
+			fprintf(stderr, VT_OK "kivfs_open: REMOTE OPEN OK\n" VT_NORMAL);
 		}
 
 		/* If file is NOT too large */

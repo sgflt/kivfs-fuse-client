@@ -17,6 +17,7 @@
 #include <ulockmgr.h>
 #include <inttypes.h>
 
+#include "main.h"
 #include "config.h"
 #include "cache.h"
 #include "connection.h"
@@ -142,7 +143,7 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 	kivfs_ofile_t *file;
 	char *full_path = get_full_path( path );
 
-	file = (kivfs_ofile_t *)calloc(1, sizeof( kivfs_ofile_t ));
+	file = calloc(1, sizeof( kivfs_ofile_t ));
 
 	if ( !file )
 	{
@@ -170,6 +171,8 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 
 	free( full_path );
 
+	fprintf(stderr, VT_WARNING "socket %d\n" VT_NORMAL, file->connection.socket);
+
 	/* if some descriptor is set, then everything is OK */
 	return file->fd == -1 && file->r_fd == 0 ? -errno : KIVFS_OK;
 }
@@ -177,7 +180,7 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 static int kivfs_read(const char *path, char *buf, size_t size,
 		off_t offset, struct fuse_file_info *fi){
 
-	ssize_t _size;
+	ssize_t _size = -1;
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
 	/* if no remote descriptor, then local is set */
@@ -196,20 +199,19 @@ static int kivfs_read(const char *path, char *buf, size_t size,
 		/* if file can fit into cache */
 		if ( file->fd != -1 )
 		{
-			fprintf(stderr, "COPY to CACHE fd: %lu | _size: %lu | size: %lu\n",file->fd, _size, size);
-			fwrite(buf, 1, _size, stderr);
+			fprintf(stderr, VT_INFO "COPY to CACHE fd: %lu | _size: %lu | size: %lu\n" VT_NORMAL,file->fd, _size, size);
+			//DBG fwrite(buf, 1, _size, stderr);
 			if ( pwrite(file->fd, buf, _size, offset) != _size )
 			{
-				perror("pwrite: ERRRRRRR");
+				fprintf(stderr, VT_ERROR "COPY to CACHE FAILED fd: %lu | _size: %lu | size: %ld\n" VT_NORMAL,file->fd, _size, size);
+				perror("pwrite: ");
 			}
 		}
 		else
 		{
-			fprintf(stderr, "JUST REMOTE READ fd: %lu | _size: %lu | size: %lu\n", file->r_fd, _size, size);
+			fprintf(stderr, VT_INFO "JUST REMOTE READ fd: %lu | _size: %lu | size: %lu\n" VT_NORMAL, file->r_fd, _size, size);
 		}
 	}
-
-
 
 	return _size;
 }
@@ -250,7 +252,7 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 	kivfs_ofile_t *file;
 	char *full_path = get_full_path( path );
 
-	file = (kivfs_ofile_t *)calloc(1, sizeof( kivfs_ofile_t ));
+	file = calloc(1, sizeof( kivfs_ofile_t ));
 
 	if ( !file )
 	{
@@ -280,7 +282,8 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 
 	if ( !cache_add(path, NULL) )
 	{
-		if ( !kivfs_remote_create(path, mode, file) )
+//		if ( !kivfs_remote_create(path, mode, file) )
+		if ( !kivfs_remote_open(path, mode | O_RDWR, file) )
 		{
 			//TODO check type of error
 			cache_log(path, NULL, KIVFS_TOUCH);
@@ -407,29 +410,28 @@ static int kivfs_ftruncate(const char *path, off_t size, struct fuse_file_info *
 }
 
 static int kivfs_rename(const char *old_path, const char *new_path)
-{
-	/* If renamed in databese, then rename in cache. */
-	if ( !cache_rename(old_path, new_path) )
+{	
+	char *full_old_path = get_full_path( old_path );
+	char *full_new_path = get_full_path( new_path );
+
+	errno = 0;
+
+	/* if rename was succesfull or file is just in database */
+	if ( !rename(full_old_path, full_new_path) || errno == ENOENT )
 	{
-		char *full_old_path = get_full_path( old_path );
-		char *full_new_path = get_full_path( new_path );
-
-		rename(full_old_path, full_new_path);
-		cache_log(old_path, new_path, KIVFS_MOVE);
-		//TODO remote rename or set SYNC + action
-
-		kivfs_remote_rename(old_path, new_path);
-
-		free( full_new_path );
-		free( full_old_path );
-
-		return 0;
+		if ( !kivfs_remote_rename(old_path, new_path) )
+		{
+			cache_rename(old_path, new_path);
+			cache_log(old_path, new_path, KIVFS_MOVE);
+		}
 	}
 
-	return -EISDIR;
+	free( full_new_path );
+	free( full_old_path );
+	return -errno;
 }
 
-int kivfs_lock(const char *path, struct fuse_file_info *fi, int cmd, struct flock *lock)
+static int kivfs_lock(const char *path, struct fuse_file_info *fi, int cmd, struct flock *lock)
 {
 	int res;
 
@@ -544,7 +546,6 @@ static int kivfs_rmdir(const char *path)
 	}
 
 	return -ENOENT;
-
 }
 
 
@@ -580,21 +581,18 @@ static int kivfs_chmod(const char *path, mode_t mode)
 static void *kivfs_init(struct fuse_conn_info *conn)
 {
 	kivfs_session_init();
-	//TODO
 	return NULL;
 }
 
 static void kivfs_destroy(void * ptr)
 {
-	//TODO
-
 	cache_close();
 	kivfs_session_destroy();
 
 	fprintf(stderr, "ALL OK\n");
 }
 
-int kivfs_fsync(const char *path, int data, struct fuse_file_info *fi)
+static int kivfs_fsync(const char *path, int data, struct fuse_file_info *fi)
 {
 
 	if ( fi )

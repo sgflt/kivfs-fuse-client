@@ -26,42 +26,42 @@
 #include <stdio.h>
 
 
-sqlite3 *db;
+static sqlite3 *db;
 
-sqlite3_stmt *add_stmt;
-sqlite3_stmt *rename_stmt;
-sqlite3_stmt *remove_stmt;
-sqlite3_stmt *log_stmt;
-sqlite3_stmt *readdir_stmt;
-sqlite3_stmt *getattr_stmt;
-sqlite3_stmt *get_fmod_stmt;
-sqlite3_stmt *chmod_stmt;
-sqlite3_stmt *update_stmt;
-sqlite3_stmt *get_version_stmt;
-sqlite3_stmt *update_read_hits_stmt;
-sqlite3_stmt *update_write_hits_stmt;
-sqlite3_stmt *set_cached_stmt;
-sqlite3_stmt *set_modified_stmt;
-sqlite3_stmt *get_used_size_stmt;
-sqlite3_stmt *update_version_stmt;
+static sqlite3_stmt *add_stmt;
+static sqlite3_stmt *rename_stmt;
+static sqlite3_stmt *remove_stmt;
+static sqlite3_stmt *log_stmt;
+static sqlite3_stmt *readdir_stmt;
+static sqlite3_stmt *getattr_stmt;
+static sqlite3_stmt *get_fmod_stmt;
+static sqlite3_stmt *chmod_stmt;
+static sqlite3_stmt *update_stmt;
+static sqlite3_stmt *get_version_stmt;
+static sqlite3_stmt *update_read_hits_stmt;
+static sqlite3_stmt *update_write_hits_stmt;
+static sqlite3_stmt *set_cached_stmt;
+static sqlite3_stmt *set_modified_stmt;
+static sqlite3_stmt *get_used_size_stmt;
+static sqlite3_stmt *update_version_stmt;
 
 /* Each function can be processed without race condition */
-pthread_mutex_t add_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t rename_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t remove_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t readdir_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t getattr_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t get_fmod_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t chmod_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t sync_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t update_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t get_version_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t update_read_hits_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t update_write_hits_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t set_cached_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t set_modified_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t update_version_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t add_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t rename_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t remove_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t readdir_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t getattr_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t get_fmod_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t chmod_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t sync_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t update_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t get_version_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t update_read_hits_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t update_write_hits_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t set_cached_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t set_modified_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t update_version_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 
 
@@ -74,22 +74,22 @@ static inline void cache_check_stmt(void (*initializer)(sqlite3_stmt **, sqlite3
 
 void prepare_statements()
 {
-	prepare_cache_add				(&add_stmt,		db);
-	prepare_cache_rename			(&rename_stmt,	db);
-	prepare_cache_remove			(&remove_stmt,	db);
-	prepare_cache_log				(&log_stmt,		db);
-	prepare_cache_readdir			(&readdir_stmt, db);
-	prepare_cache_getattr			(&getattr_stmt,	db);
-	prepare_cache_file_mode		(&get_fmod_stmt,db);
-	prepare_cache_chmod			(&chmod_stmt, 	db);
-	prepare_cache_update			(&update_stmt,	db);
-	prepare_cache_get_version	(&get_version_stmt,	db);
-	prepare_cache_update_read_hits(&update_read_hits_stmt, db);
-	prepare_cache_update_write_hits(&update_write_hits_stmt, db);
-	prepare_cache_set_cached(&set_cached_stmt, db);
-	prepare_cache_set_modified(&set_modified_stmt, db);
-	prepare_cache_get_used_size(&get_used_size_stmt, db);
-	prepare_cache_update_version(&update_version_stmt, db);
+	prepare_cache_add				(&add_stmt,					db);
+	prepare_cache_rename			(&rename_stmt,				db);
+	prepare_cache_remove			(&remove_stmt,				db);
+	prepare_cache_log				(&log_stmt,					db);
+	prepare_cache_readdir			(&readdir_stmt,				db);
+	prepare_cache_getattr			(&getattr_stmt,				db);
+	prepare_cache_file_mode			(&get_fmod_stmt,			db);
+	prepare_cache_chmod				(&chmod_stmt,				db);
+	prepare_cache_update			(&update_stmt,				db);
+	prepare_cache_get_version		(&get_version_stmt,			db);
+	prepare_cache_update_read_hits	(&update_read_hits_stmt,	db);
+	prepare_cache_update_write_hits	(&update_write_hits_stmt,	db);
+	prepare_cache_set_cached		(&set_cached_stmt,			db);
+	prepare_cache_set_modified		(&set_modified_stmt,		db);
+	prepare_cache_get_used_size		(&get_used_size_stmt,		db);
+	prepare_cache_update_version	(&update_version_stmt,		db);
 }
 
 int cache_init()
@@ -276,7 +276,7 @@ int cache_add(const char *path, kivfs_file_t *file)
 		bind_int(add_stmt, ":read_hits", 0);
 		bind_int(add_stmt, ":write_hits", 0);
 		//bind_int(add_stmt, ":type", type);
-		bind_int(add_stmt, ":version", 2);
+		bind_int(add_stmt, ":version", 1);
 
 		printf("\n\033[33;1m\tmode: %c%c%c %c%c%c %c%c%c  %o %o \033[0;0m\n",
 									stbuf.st_mode & S_IRUSR ? 'r' : '-',
@@ -312,15 +312,14 @@ int cache_rename(const char *old_path, const char *new_path){
 	bind_text(rename_stmt, ":old_path", old_path);
 	bind_text(rename_stmt, ":new_path", new_path);
 
+	/* overwrite destination */
+	cache_remove( new_path );
+
 	sqlite3_step( rename_stmt );
 
 	if ( sqlite3_reset( rename_stmt ) != SQLITE_OK )
 	{
 		fprintf(stderr,"\033[31;1mcache_rename: %s\033[0;0m %s %d\n", old_path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
-		pthread_mutex_unlock( &rename_mutex );
-		//TODO everwrite existing files, if new path is directory then move file/dir into it, else EISDIR
-		return 0;
-		return -EEXIST;
 	}
 
 	pthread_mutex_unlock( &rename_mutex );
@@ -346,71 +345,69 @@ int cache_remove(const char *path){
 	return res;
 }
 
-/*----------------------------------------------------------------------------
-   Function : cache_solve_conflic(const char *path, const char *new_path, KIVFS_VFS_COMMAND action)
-   In       : path: Path to the source file is mandatory.
-   	   	   	  new path: Path to the new file, if action is KIVFS_MOVE.
-			  action: Type of action. All types are declared in kivfs-cmdn-vfs.h
-   Out      : void
-   Job      : Solves conflict in log table.
-   Notice   :
-
-   	   	   	  KIVFS_UNLINK:
-   	   	   	  KIVFS_RMDIR:
-    		  The idea is that if a file is created in offline mode and then removed before sync operation,
-   	   	   	  conflict in log occurs between (KIVFS_TOUCH or KIVFS_MKDIR) and (KIVFS_RMDIR or KIVFS_UNLINK).
-   	   	   	  It is useless sending create request to a server and immediately unlink newly created file.
-   	   	   	  So if UNLINK/RMDIR occurs after TOUCH/MKDIR the record is deleted as anti-matter and matter annihilates.
-
-   	   	   	  WRITE to unlinked file is not opossible.
-
-
-			  KIVFS_TOUCH:
-			  KIVFS_WRITE:
-   	   	   	  Sometimes can occur opposite situation. Remote file is deleted locally and in near future before sync
-   	   	   	  recreated. Informing server about unlink is not efficient due to overhead like in previous situation.
-   	   	   	  KIVFS_UNLINK is changed to KIVFS_WRITE. Why WRITE? Because it means that the file is changed and
-   	   	   	  have to be synced as soon as possible.
-
-   	   	   	  WRITE can also conflict with another WRITE. In this case WRITE flag stays the same.
-
-
-
-
- ---------------------------------------------------------------------------*/
-void cache_solve_conflict(const char *path, const char *new_path, KIVFS_VFS_COMMAND action)
+/**
+ * Solves conflict in log table.
+ *
+ *
+ *		KIVFS_UNLINK:
+ *		KIVFS_RMDIR:
+ *		The idea is that if a file is created in offline mode and then removed before sync operation,
+ *		conflict in log occurs between (KIVFS_TOUCH or KIVFS_MKDIR) and (KIVFS_RMDIR or KIVFS_UNLINK).
+ *		It is useless sending create request to a server and immediately unlink newly created file.
+ *		So if UNLINK/RMDIR occurs after TOUCH/MKDIR the record is deleted as anti-matter and matter annihilates.
+ *
+ *		WRITE to unlinked file is not opossible.
+ *
+ *
+ *		KIVFS_TOUCH:
+ *		KIVFS_WRITE:
+ *		Sometimes can occur opposite situation. Remote file is deleted locally and in near future before sync
+ *		recreated. Informing server about unlink is not efficient due to overhead like in previous situation.
+ *		KIVFS_UNLINK is changed to KIVFS_WRITE. Why WRITE? Because it means that the file is changed and
+ *		have to be synced as soon as possible.
+ *
+ *		WRITE can also conflict with another WRITE. In this case WRITE flag stays the same.
+ * @param path Path to the source file is mandatory.
+ * @param new_path Path to the new file, if action is KIVFS_MOVE.
+ * @param action Type of action. All types are declared in kivfs-cmdn-vfs.h
+ * @see kivfs-cmdn-vfs.h
+ */
+static void cache_solve_conflict(const char *path, const char *new_path, KIVFS_VFS_COMMAND action)
 {
-	static sqlite3_stmt *move_stmt;
-	static sqlite3_stmt *unlink_stmt;
-	static sqlite3_stmt *unlink_remote_stmt;
-	static sqlite3_stmt *write_stmt;
-	static sqlite3_stmt *chmod_stmt;
+	static sqlite3_stmt *move_stmt = NULL;
+	static sqlite3_stmt *unlink_stmt= NULL;
+	static sqlite3_stmt *unlink_remote_stmt = NULL;
+	static sqlite3_stmt *write_stmt = NULL; //XXX: deprecated
+	static sqlite3_stmt *chmod_stmt = NULL;
 
 	switch( action ){
 		case KIVFS_RMDIR:
+			fprintf(stderr,"\033[31;1mLOG RMDIR: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
 			/* fall through */
-				fprintf(stderr,"\033[31;1mLOG RMDIR: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
 
 		case KIVFS_UNLINK:
-				fprintf(stderr,"\033[31;1mLOG UNLINK: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
+			fprintf(stderr,"\033[31;1mLOG UNLINK: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
 			cache_check_stmt(prepare_log_remove, &unlink_stmt);
 			bind_text(unlink_stmt, ":path", path);
 
 			/* Deletes single row containging action == KIVFS_MKDIR or KIVFS_TOUCH */
 			sqlite3_step( unlink_stmt );
-			if( sqlite3_reset( unlink_stmt ) != SQLITE_OK ){
+			if ( sqlite3_reset( unlink_stmt ) != SQLITE_OK )
+			{
 				fprintf(stderr,"\033[31;1mLOG update error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
 			}
 
 			/* Nothing has been removed, but we have to solve conflict between KIVFS_WRITE or KIVFS_TRUNCATE */
-			else if( sqlite3_changes( db ) == 0 ){
+			else if( sqlite3_changes( db ) == 0 )
+			{
 				cache_check_stmt(prepare_log_remote_remove, &unlink_remote_stmt);
 
 				bind_text(unlink_remote_stmt, ":path", path);
 				bind_int(unlink_remote_stmt, ":action", action);
 
 				sqlite3_step( unlink_remote_stmt );
-				if( sqlite3_reset( unlink_remote_stmt ) != SQLITE_OK ){
+				if ( sqlite3_reset( unlink_remote_stmt ) != SQLITE_OK )
+				{
 					fprintf(stderr,"\033[31;1mLOG update unlink error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
 				}
 			}
@@ -425,9 +422,9 @@ void cache_solve_conflict(const char *path, const char *new_path, KIVFS_VFS_COMM
 			sqlite3_step( move_stmt );
 
 			//TODO what if a file is moved to previous name? DELETE movement in log!
-			if( sqlite3_reset( move_stmt ) != SQLITE_OK ){
+			if ( sqlite3_reset( move_stmt ) != SQLITE_OK )
+			{
 				fprintf(stderr,"\033[31;1mLOG update move error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
-
 			}
 			break;
 
@@ -439,7 +436,8 @@ void cache_solve_conflict(const char *path, const char *new_path, KIVFS_VFS_COMM
 			bind_text(write_stmt, ":path", path);
 			sqlite3_step( write_stmt );
 
-			if( sqlite3_reset( write_stmt ) != SQLITE_OK ){
+			if ( sqlite3_reset( write_stmt ) != SQLITE_OK )
+			{
 				fprintf(stderr,"\033[31;1mLOG update write error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
 			}
 			fprintf(stderr,"\033[31;1mLOG update write: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
@@ -450,7 +448,8 @@ void cache_solve_conflict(const char *path, const char *new_path, KIVFS_VFS_COMM
 			bind_text(chmod_stmt, ":path", path);
 			sqlite3_step( chmod_stmt );
 
-			if( sqlite3_reset( chmod_stmt ) != SQLITE_OK ){
+			if ( sqlite3_reset( chmod_stmt ) != SQLITE_OK )
+			{
 				fprintf(stderr,"\033[31;1mLOG update chmod error: %s\033[0;0m %s\n", path, sqlite3_errmsg( db ));
 			}
 			break;
@@ -483,6 +482,7 @@ void cache_log(const char *path, const char *new_path, KIVFS_VFS_COMMAND action)
 
 		default:
 			fprintf(stderr,"\033[31;1mAction log failed: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+			break;
 	}
 
 	pthread_mutex_unlock( &log_mutex );
@@ -576,12 +576,12 @@ kivfs_version_t cache_get_version(const char *path)
 
 	bind_text(get_version_stmt, ":path", path);
 
-	if( sqlite3_step( get_version_stmt ) == SQLITE_ROW )
+	if ( sqlite3_step( get_version_stmt ) == SQLITE_ROW )
 	{
 		version = sqlite3_column_int(get_version_stmt, 0);
 	}
 
-	if( sqlite3_reset( get_version_stmt ) == SQLITE_OK )
+	if ( sqlite3_reset( get_version_stmt ) == SQLITE_OK )
 	{
 		pthread_mutex_unlock( &get_version_mutex );
 		return version;
@@ -595,7 +595,7 @@ kivfs_version_t cache_get_version(const char *path)
 	return version;
 }
 
-//rename to get_file_mode
+
 mode_t cache_file_mode(const char *path )
 {
 	mode_t mode;
@@ -604,12 +604,12 @@ mode_t cache_file_mode(const char *path )
 
 	bind_text(get_fmod_stmt, ":path", path);
 
-	if( sqlite3_step( get_fmod_stmt ) == SQLITE_ROW )
+	if ( sqlite3_step( get_fmod_stmt ) == SQLITE_ROW )
 	{
 		mode = sqlite3_column_int(get_fmod_stmt, 0);
 	}
 
-	if( sqlite3_reset( get_fmod_stmt ) == SQLITE_OK )
+	if ( sqlite3_reset( get_fmod_stmt ) == SQLITE_OK )
 	{
 		pthread_mutex_unlock( &get_fmod_mutex );
 		return mode;
@@ -669,6 +669,7 @@ void cache_sync_log()
 					/* File is locked so we can't delete entry from log */
 					break;
 
+				case KIVFS_ERC_NO_SUCH_DIR:
 				case KIVFS_ERC_NO_SUCH_FILE:
 					/* File doesn't exist and entry in log is just wrong */
 					cache_log_delete(path, action);
@@ -716,6 +717,9 @@ void cache_sync_modified()
 				break;
 
 			case KIVFS_ERC_NO_SUCH_DIR:
+				kivfs_remote_mkdir( path );
+				break;
+
 			case KIVFS_ERC_NO_SUCH_FILE:
 				kivfs_remote_create(path, mode, NULL);
 				break;
@@ -725,7 +729,7 @@ void cache_sync_modified()
 				return;
 		}
 
-		//if (version == file->version)
+		if (version <= file->version)
 		{
 			res = kivfs_put_from_cache(path);
 
@@ -746,7 +750,7 @@ void cache_sync_modified()
 			}
 
 		}
-		//else
+		else
 		{
 			fprintf(stderr, "Remote file has different version, can not sync!\n");
 		}
@@ -1009,3 +1013,4 @@ void cache_update_version(const char *path)
 
 	pthread_mutex_unlock( &update_version_mutex );
 }
+

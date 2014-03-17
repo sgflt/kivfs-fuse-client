@@ -16,10 +16,19 @@
 #include "config.h"
 #include "cache.h"
 
-pthread_t rescuer_thr;
-pthread_cond_t try_connect = PTHREAD_COND_INITIALIZER;
+/**
+ * Conditional variable for monitor. Signal on this variable wakes up a rescuer thread.
+ */
+static pthread_cond_t try_connect = PTHREAD_COND_INITIALIZER;
 
+/**
+ * Global connection variable is intended for storing connection to the VFS layer.
+ */
 kivfs_connection_t connection;
+
+/**
+ * Unique session identificator.
+ */
 int sessid = 0;
 
 void kivfs_restore_connnection(void)
@@ -57,7 +66,7 @@ void * kivfs_reconnect(void *args)
 	return NULL;
 }
 
-int kivfs_login(const char *username, const char *password){
+void kivfs_login(const char *username, const char *password){
 
 	int res;
 	kivfs_msg_t *response = NULL;
@@ -94,29 +103,28 @@ int kivfs_login(const char *username, const char *password){
 			{
 				sessid = client->user->id;
 				fprintf(stderr, "Connection established with SESSID %d\n", sessid);
-				return KIVFS_OK;
+				return;
 			}
 		}
 	}
 
 	kivfs_free_msg( response );
 	kivfs_free_client( client );
-	return res;
 }
 
 
-int kivfs_session_init()
+void kivfs_session_init()
 {
+	static pthread_t rescuer_thr;
+
     /*--- 1st step: Initializing the SSL Library */
     SSL_library_init(); /* load encryption & hash algorithms for SSL */
     SSL_load_error_strings(); /* load the error strings for good error reporting */
 
-	kivfs_set_connection(&connection, get_server()->public_ip, 30003);
+	kivfs_set_connection(&connection, get_server()->ip, get_server()->port);
 	kivfs_print_connection( &connection );
 
 	pthread_create(&rescuer_thr, NULL, kivfs_reconnect, NULL);
-
-	return 0;
 }
 
 void kivfs_session_destroy()

@@ -1,5 +1,7 @@
 INSTALATION
-	The newest version of KIVFS-FUSe client have NOT an instalator.
+	For instalation consider adding "deb http://kivfs.qwsome.eu/ debian main" into /etc/apt/sources.list
+	
+	After apt-get update kivfs-* packages should be available.
 
 COMPILING
 	kivfs library have to be installed in standard location /usr/lib or /usr/local/lib

@@ -40,7 +40,7 @@ cleanup.d
 ./obj/%.o: ./src/%.c
 	@echo 'Building file: $<'
 	@echo 'Invoking: C Comoiler'
-	$(CC) -O0 -ggdb3 -Wall -pedantic -c -fmessage-length=0 `pkg-config fuse sqlite3 libssl --cflags` -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	$(CC) -O0 -ggdb3 -Wall -pedantic -c -fmessage-length=0 `pkg-config fuse sqlite3 libssl krb5 --cflags` -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 	

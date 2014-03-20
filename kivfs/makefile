@@ -58,7 +58,7 @@ clean:
 	-@echo ' '
 
 dependents:
-	@sudo apt-get install libfuse-dev libssl-dev libsqlite3-dev pkg-config
+	@sudo apt-get install libfuse-dev libssl-dev libsqlite3-dev heimdal-dev pkg-config
 
 #############################################################################
 ##

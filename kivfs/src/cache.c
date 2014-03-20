@@ -729,7 +729,7 @@ void cache_sync_modified()
 				return;
 		}
 
-		if (version <= file->version)
+		if ( !file || version <= file->version)
 		{
 			res = kivfs_put_from_cache(path);
 

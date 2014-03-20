@@ -68,19 +68,11 @@ void open_local_copy(const char *path, kivfs_ofile_t *file, int flags)
 
 	print_open_mode( flags );
 
-	//XXX: do while will be better
-	file->fd = open(full_path, flags, S_IRUSR | S_IWUSR ); /* Open if exists, or create in cache */
+	file->fd = open(full_path, flags); /* Open if exists */
 
 	if ( file->fd == -1 )
 	{
-		/* Maybe some dirs are just in database */
-		file->fd = recreate_and_open(full_path, file->stbuf.st_mode);
-
-		if ( file->fd == -1 )
-		{
-			fprintf(stderr, VT_ERROR "kivfs_open: LOCAL OPEN FAILED\n" VT_NORMAL);
-			//return -ENOENT;
-		}
+		fprintf(stderr, VT_ERROR "kivfs_open: LOCAL OPEN FAILED\n" VT_NORMAL);
 	}
 	else
 	{
@@ -121,6 +113,7 @@ void open_file(const char *path, kivfs_ofile_t *file,  struct fuse_file_info *fi
 	}
 
 	fprintf(stderr, VT_INFO "remote version: %" PRIu64 ", local version: %d\n" VT_NORMAL, file_info ? file_info->version : -1, cache_get_version( path ));
+	kivfs_print_file(file_info);
 
 	file_exists = access(full_path, F_OK) == 0;
 	free( full_path );

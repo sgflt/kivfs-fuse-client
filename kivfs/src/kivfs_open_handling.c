@@ -18,6 +18,7 @@
 #include "cache.h"
 #include "cleanup.h"
 #include "tools.h"
+#include "stats.h"
 
 
 /**
@@ -68,7 +69,7 @@ void open_local_copy(const char *path, kivfs_ofile_t *file, int flags)
 
 	print_open_mode( flags );
 
-	file->fd = open(full_path, flags); /* Open if exists */
+	file->fd = open(full_path, flags, file->stbuf.st_mode); /* Open if exists */
 
 	if ( file->fd == -1 )
 	{
@@ -82,6 +83,38 @@ void open_local_copy(const char *path, kivfs_ofile_t *file, int flags)
 	free( full_path );
 }
 
+void try_open_remote_with_cache(const char *path, kivfs_ofile_t *file,  struct fuse_file_info *fi, kivfs_file_t *file_info)
+{
+	int res;
+	fprintf(stderr, VT_YELLOW "Remote file is newer or missing, local will be replaced.\n" VT_NORMAL);
+
+	res = kivfs_remote_open(path, fi->flags, file);
+
+	if ( res )
+	{
+		fprintf(stderr, VT_ERROR "kivfs_open: REMOTE OPEN FAILED %d\n" VT_NORMAL, res);
+		errno = -res;
+		return;
+	}
+	else
+	{
+		fprintf(stderr, VT_OK "kivfs_open: REMOTE OPEN OK\n" VT_NORMAL);
+	}
+
+	/* If file is NOT too large */
+	if ( file_info->size < get_cache_size() / 2 )
+	{
+		file->stbuf.st_size = file_info->size; /* copy new size to proper truncation in cache */
+		open_with_cache(path, file, fi->flags);
+		cache_set_cached(path, 1);
+	}
+	else
+	{
+		stats_log(path, KIVFS_CACHE_TOO_LARGE, 1);
+	}
+
+	cache_update(path, fi, file_info);
+}
 
 void open_file(const char *path, kivfs_ofile_t *file,  struct fuse_file_info *fi)
 {
@@ -118,34 +151,20 @@ void open_file(const char *path, kivfs_ofile_t *file,  struct fuse_file_info *fi
 	file_exists = access(full_path, F_OK) == 0;
 	free( full_path );
 
+	if ( file_exists )
+	{
+		stats_log(path, KIVFS_CACHE_HIT, file->stbuf.st_size);
+	}
+	else
+	{
+		stats_log(path, KIVFS_CACHE_MISS, file->stbuf.st_size);
+	}
+
 	/* if local file is older than remote or doesn't exist and online*/
 	if ( file_info && (file_info->version > cache_get_version( path ) || !file_exists) )
 	{
-		fprintf(stderr, VT_YELLOW "Remote file is newer or missing, local will be replaced.\n" VT_NORMAL);
-
-		res = kivfs_remote_open(path, fi->flags, file);
-
-		if ( res )
-		{
-			fprintf(stderr, VT_ERROR "kivfs_open: REMOTE OPEN FAILED %d\n" VT_NORMAL, res);
-			kivfs_free_file( file_info );
-			errno = -res;
-			return;
-		}
-		else
-		{
-			fprintf(stderr, VT_OK "kivfs_open: REMOTE OPEN OK\n" VT_NORMAL);
-		}
-
-		/* If file is NOT too large */
-		if ( file_info->size < get_cache_size() / 2 )
-		{
-			file->stbuf.st_size = file_info->size; /* copy new size to proper truncation in cache */
-			open_with_cache(path, file, fi->flags | O_RDWR | (!file_exists ? O_CREAT : 0));
-			cache_set_cached(path, 1);
-		}
-
-		cache_update(path, fi, file_info);
+		fi->flags |= O_RDWR | ( !file_exists ? O_CREAT : 0);
+		try_open_remote_with_cache(path, file, fi, file_info);
 	}
 
 	/* local file is up to date, we don't need to open remote file */

@@ -26,6 +26,7 @@
 #include "kivfs_remote_operations.h"
 #include "kivfs_open_handling.h"
 #include "cleanup.h"
+#include "stats.h"
 
 #define concat(cache_path, path) { strcat(full_path, cache_path); strcat(full_path, path); }
 #define CONFLICT ".conflict"
@@ -318,7 +319,6 @@ static int kivfs_access(const char *path, int mask)
 
 static int kivfs_release(const char *path, struct fuse_file_info *fi)
 {
-	//TODO: odeslat změny na server
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
 
@@ -341,7 +341,6 @@ static int kivfs_release(const char *path, struct fuse_file_info *fi)
 		}
 	}
 
-	//TODO BIGFILE
 	if ( file->flags & KIVFS_FLG_WR )
 	{
 		/* small file update from cache */
@@ -410,7 +409,7 @@ static int kivfs_ftruncate(const char *path, off_t size, struct fuse_file_info *
 }
 
 static int kivfs_rename(const char *old_path, const char *new_path)
-{	
+{
 	char *full_old_path = get_full_path( old_path );
 	char *full_new_path = get_full_path( new_path );
 
@@ -581,6 +580,8 @@ static int kivfs_chmod(const char *path, mode_t mode)
 static void *kivfs_init(struct fuse_conn_info *conn)
 {
 	kivfs_session_init();
+	set_cache_policy( KIVFS_LFUSS );
+	stats_init();
 	return NULL;
 }
 
@@ -588,6 +589,9 @@ static void kivfs_destroy(void * ptr)
 {
 	cache_close();
 	kivfs_session_destroy();
+
+	stats_print_all();
+	stats_close();
 
 	fprintf(stderr, "ALL OK\n");
 }

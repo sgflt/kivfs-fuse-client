@@ -21,7 +21,8 @@ static sqlite3_stmt *insert_stmt;
 
 static char *types[] = {
 	"hit",
-	"miss"
+	"miss",
+	"too large"
 };
 
 static void init_stmts(void)
@@ -106,7 +107,7 @@ static int stats_print_callback(void *data, int rows, char **row_data, char **co
 {
 	for(int row = 0; row < rows; row += 3)
 	{
-		fprintf(stderr, "%s: %s | %s: %s | %s: %s\n", columns[row], row_data[row], columns[row + 1], row_data[row + 1], columns[row + 2], row_data[row + 2]);
+		printf("%10s: %20s | %10s: %10s | %10s: %10s\n", columns[row], row_data[row], columns[row + 1], row_data[row + 1], columns[row + 2], row_data[row + 2]);
 	}
 
 	return 0;
@@ -116,5 +117,9 @@ void stats_print_all(void)
 {
 
 	fprintf(stderr, VT_ACTION "STATS:\n" VT_NORMAL);
-	sqlite3_exec(db, "SELECT path, avg( case when type = 'hit' then 1 else 0 end ) AS hitratio, sum(CASE WHEN type = 'hit' THEN value ELSE 0 END) AS saved FROM stats GROUP BY path", stats_print_callback, NULL, NULL);
+	sqlite3_exec(db, "SELECT path, avg( case when type = 'hit' then 1 else 0 end ) AS hitratio, sum(CASE WHEN type = 'hit' THEN value ELSE 0 END) AS saved FROM stats WHERE type != 'too large' GROUP BY path", stats_print_callback, NULL, NULL);
+	fprintf(stderr, VT_ACTION "ENTRIES:\n" VT_NORMAL);
+	sqlite3_exec(db, "SELECT path, type, value FROM stats", stats_print_callback, NULL, NULL);
+	fprintf(stderr, VT_ACTION "GLOBAL STATS:\n" VT_NORMAL);
+	sqlite3_exec(db, "SELECT count(*), avg( case when type = 'hit' then 1 else 0 end ) AS hitratio, sum(CASE WHEN type = 'hit' THEN value ELSE 0 END) AS saved FROM stats WHERE type != 'too large'", stats_print_callback, NULL, NULL);
 }

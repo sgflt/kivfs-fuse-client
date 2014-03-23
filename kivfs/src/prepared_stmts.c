@@ -13,6 +13,7 @@
 #include "kivfs_operations.h"
 #include "prepared_stmts.h"
 #include "cache.h"
+#include "main.h"
 
 
 void prepare_cache_add(sqlite3_stmt **stmt, sqlite3 *db){
@@ -334,9 +335,18 @@ void prepare_cache_update_version(sqlite3_stmt **stmt, sqlite3 *db)
 {
 	char *sql = 	"UPDATE files SET version = version + 1 WHERE path = :path";
 
-	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
+	if ( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) )
 		fprintf(stderr,"\033[31;1mprepare_update_version:\033[0;0m %s\n", sqlite3_errmsg( db ));
-	}
 	else
 		fprintf(stderr,"\033[33;1mprepare_update_version:\033[0;0m %s\n", sqlite3_errmsg( db ));
+}
+
+void prepare_stats_insert(sqlite3_stmt **stmt, sqlite3 *db)
+{
+	char *sql = 	"INSERT INTO stats (path, type, value) VALUES (:path, :type, :value)";
+
+	if ( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) )
+		fprintf(stderr, VT_ERROR "prepare_stats_insert: %s\n" VT_NORMAL, sqlite3_errmsg( db ));
+	else
+		fprintf(stderr, VT_INFO "prepare_stats_insert: %s\n" VT_NORMAL, sqlite3_errmsg( db ));
 }

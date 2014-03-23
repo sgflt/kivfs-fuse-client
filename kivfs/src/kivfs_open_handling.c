@@ -69,7 +69,7 @@ void open_local_copy(const char *path, kivfs_ofile_t *file, int flags)
 
 	print_open_mode( flags );
 
-	file->fd = open(full_path, flags, file->stbuf.st_mode); /* Open if exists */
+	file->fd = open(full_path, flags | file->flags, file->stbuf.st_mode); /* Open if exists */
 
 	if ( file->fd == -1 )
 	{
@@ -110,7 +110,7 @@ void try_open_remote_with_cache(const char *path, kivfs_ofile_t *file,  struct f
 	}
 	else
 	{
-		stats_log(path, KIVFS_CACHE_TOO_LARGE, 1);
+		stats_log(path, KIVFS_CACHE_TOO_LARGE, file->stbuf.st_size);
 	}
 
 	cache_update(path, fi, file_info);
@@ -163,8 +163,9 @@ void open_file(const char *path, kivfs_ofile_t *file,  struct fuse_file_info *fi
 	/* if local file is older than remote or doesn't exist and online*/
 	if ( file_info && (file_info->version > cache_get_version( path ) || !file_exists) )
 	{
-		fi->flags |= O_RDWR | ( !file_exists ? O_CREAT : 0);
+		file->flags = O_RDWR | ( !file_exists ? O_CREAT : 0);
 		try_open_remote_with_cache(path, file, fi, file_info);
+		file->flags = 0;
 	}
 
 	/* local file is up to date, we don't need to open remote file */

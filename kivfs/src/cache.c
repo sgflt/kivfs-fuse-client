@@ -746,6 +746,7 @@ void cache_sync_modified()
 			{
 				fprintf(stderr, "File is up to date on the server from now!\n");
 				cache_set_modified(path, 0);
+				cache_update_version( path );
 			}
 
 		}
@@ -754,7 +755,7 @@ void cache_sync_modified()
 			fprintf(stderr, "Remote file has different version, can not sync!\n");
 		}
 
-		kivfs_free_file(file);
+		kivfs_free_file( file );
 	}
 
 	sqlite3_finalize( stmt );

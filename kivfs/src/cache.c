@@ -8,13 +8,13 @@
 
 #include <fuse.h>
 #include <errno.h>
-#include <limits.h>
 #include <string.h>
 #include <stdlib.h>
 #include <libgen.h>
 #include <sqlite3.h>
 #include <kivfs.h>
 #include <pthread.h>
+#include <limits.h>
 
 #include "config.h"
 #include "cache.h"
@@ -95,7 +95,7 @@ void prepare_statements()
 int cache_init()
 {
 	int res;
-	char db_path[ PATH_MAX ];
+	char db_path[ PATH_MAX ] = {0};
 	char *db_filename = "/kivfs.db";
 
 	//XXX: Buffer overflow may occur.
@@ -214,13 +214,12 @@ int cache_add(const char *path, kivfs_file_t *file)
 
 	if ( file )
 	{
-		char tmp[4096]; //XXX: unsafe
+		char tmp[PATH_MAX] = {0};
 		mode_t mode;
 
-		memset(tmp, 0, 4096);
 		strcat(tmp, path);
 		if(strcmp(path, "/") != 0)
-			strcat(tmp, "/");
+			strncat(tmp, "/", PATH_MAX - 1);
 		strcat(tmp, file->name);
 
 		mode = (file->acl->owner << 6) | (file->acl->group << 3) | (file->acl->other);

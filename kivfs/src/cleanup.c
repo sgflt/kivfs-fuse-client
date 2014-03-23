@@ -15,8 +15,7 @@
 #include "config.h"
 #include "main.h"
 
-
-int cleanup(const size_t size)
+static int fifo(const size_t size)
 {
 	int res = 0;
 	size_t used_size = cache_get_used_size();
@@ -51,6 +50,27 @@ int cleanup(const size_t size)
 	sqlite3_finalize( stmt );
 
 	return res;
+}
+
+static int lfuss(const size_t size)
+{
+
+}
+
+
+int cleanup(const size_t size)
+{
+	switch( get_cache_policy() )
+	{
+		case KIVFS_LFUSS:
+			return lfuss( size );
+
+		case KIVFS_FIFO:
+			return fifo( size );
+
+		default:
+			return -ENOSYS;
+	}
 }
 
 

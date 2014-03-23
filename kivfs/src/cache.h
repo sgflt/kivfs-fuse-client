@@ -19,6 +19,10 @@
 
 /*---------------------------- CONSTANTS -----------------------------------*/
 
+typedef enum {
+	KIVFS_LFUSS,
+	KIVFS_FIFO
+} kivfs_cache_policy_t;
 /*---------------------------- Variables -----------------------------------*/
 
 /*------------------- Functions: ANSI C prototypes -------------------------*/
@@ -196,7 +200,5 @@ void cache_update_version(const char*path);
 
 /*----------------------------- Macros -------------------------------------*/
 
-#define bind_text(stmt, sql_var, var) sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, sql_var), var, ZERO_TERMINATED, SQLITE_STATIC)
-#define bind_int(stmt, sql_var, var) sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, sql_var), var)
 
 #endif /* CACHE_H_ */

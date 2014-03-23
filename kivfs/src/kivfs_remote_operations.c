@@ -28,11 +28,15 @@ static int cmd_1arg(const char *path, KIVFS_VFS_COMMAND action){
 	int res;
 	kivfs_msg_t *response = NULL;
 
-	res = kivfs_send_and_receive(
-			&connection,
-			kivfs_request(sessid, action, KIVFS_STRING_FORMAT, path),
-			&response
-			);
+	pthread_mutex_lock( get_mutex() );
+	{
+		res = kivfs_send_and_receive(
+				&connection,
+				kivfs_request(sessid, action, KIVFS_STRING_FORMAT, path),
+				&response
+				);
+	}
+	pthread_mutex_unlock( get_mutex() );
 
 	if( !res ){
 		res = response->head->return_code;
@@ -56,16 +60,20 @@ int kivfs_remote_file_info(const char * path, kivfs_file_t **file)
 		return -ENOTCONN;
 	}
 
-	res = kivfs_send_and_receive(
-			&connection,
-			kivfs_request(
-				sessid,
-				KIVFS_FILE_INFO,
-				KIVFS_FILE_INFO_FORMAT,
-				path
-				),
-			&response
-			);
+	pthread_mutex_lock( get_mutex() );
+	{
+		res = kivfs_send_and_receive(
+				&connection,
+				kivfs_request(
+					sessid,
+					KIVFS_FILE_INFO,
+					KIVFS_FILE_INFO_FORMAT,
+					path
+					),
+				&response
+				);
+	}
+	pthread_mutex_unlock( get_mutex() );
 
 	if ( !res )
 	{
@@ -134,18 +142,22 @@ int kivfs_get_to_cache(const char *path)
 
 	//kivfs_connect(&file.connection, 1);
 
-	res = kivfs_send_and_receive(
-			&file.connection,
-			kivfs_request(
-				sessid,
-				KIVFS_READ,
-				KIVFS_READ_FORMAT,
-				path,
-				file_info->size,
-				0
-				),
-			&response
-			);
+	pthread_mutex_lock( get_mutex() );
+	{
+		res = kivfs_send_and_receive(
+				&file.connection,
+				kivfs_request(
+					sessid,
+					KIVFS_READ,
+					KIVFS_READ_FORMAT,
+					path,
+					file_info->size,
+					0
+					),
+				&response
+				);
+	}
+	pthread_mutex_lock( get_mutex() );
 
 	if ( !res )
 	{
@@ -225,18 +237,23 @@ int kivfs_put_from_cache(const char *path)
 		return res;
 	}
 
-	res = kivfs_send_and_receive(
-			&file.connection,
-			kivfs_request(
-				sessid,
-				KIVFS_WRITE,
-				KIVFS_WRITE_FORMAT,
-				file.r_fd,
-				file.stbuf.st_size,
-				0
-				),
-			&response
-			);
+	pthread_mutex_lock( get_mutex() );
+	{
+		res = kivfs_send_and_receive(
+				&file.connection,
+				kivfs_request(
+					sessid,
+					KIVFS_WRITE,
+					KIVFS_WRITE_FORMAT,
+					file.r_fd,
+					file.stbuf.st_size,
+					0
+					),
+				&response
+				);
+	}
+	pthread_mutex_unlock( get_mutex() );
+
 	fprintf(stderr, VT_INFO "res %d\n" VT_NORMAL, res);
 	if ( !res )
 	{
@@ -302,17 +319,21 @@ int kivfs_remote_readdir(const char *path, kivfs_list_t **files){
 		return -ENOTCONN;
 	}
 
-	/* Send READDIR request */
-	res = kivfs_send_and_receive(
-			&connection,
-			kivfs_request(
-					sessid,
-					KIVFS_READDIR,
-					KIVFS_READDIR_FORMAT,
-					path
-					),
-			&response
-			);
+	pthread_mutex_lock( get_mutex() );
+	{
+		/* Send READDIR request */
+		res = kivfs_send_and_receive(
+				&connection,
+				kivfs_request(
+						sessid,
+						KIVFS_READDIR,
+						KIVFS_READDIR_FORMAT,
+						path
+						),
+				&response
+				);
+	}
+	pthread_mutex_unlock( get_mutex() );
 
 	if( !res ){
 
@@ -385,18 +406,22 @@ int kivfs_remote_open(const char *path, mode_t mode, kivfs_ofile_t *file){
 
 	fprintf(stderr, VT_ACTION "remote open:\n" VT_NORMAL);
 
-	/* Send OPEN request */
-	res = kivfs_send_and_receive(
-				&connection,
-				kivfs_request(
-						sessid,
-						KIVFS_OPEN,
-						KIVFS_OPEN_FORMAT,
-						path,
-						mode_utok( mode )
-						),
-					&response
-				);
+	pthread_mutex_lock( get_mutex() );
+	{
+		/* Send OPEN request */
+		res = kivfs_send_and_receive(
+					&connection,
+					kivfs_request(
+							sessid,
+							KIVFS_OPEN,
+							KIVFS_OPEN_FORMAT,
+							path,
+							mode_utok( mode )
+							),
+						&response
+					);
+	}
+	pthread_mutex_unlock( get_mutex() );
 
 	if ( !res )	{
 
@@ -445,17 +470,21 @@ int kivfs_remote_flush(kivfs_ofile_t *file){
 	int res;
 	kivfs_msg_t *response = NULL;
 
-	/* Send FLUSH request */
-	res = kivfs_send_and_receive(
-			&connection,
-			kivfs_request(
-					sessid,
-					KIVFS_FLUSH,
-					KIVFS_FLUSH_FORMAT,
-					file->r_fd
-					),
-				&response
-			);
+	pthread_mutex_lock( get_mutex() );
+	{
+		/* Send FLUSH request */
+		res = kivfs_send_and_receive(
+				&connection,
+				kivfs_request(
+						sessid,
+						KIVFS_FLUSH,
+						KIVFS_FLUSH_FORMAT,
+						file->r_fd
+						),
+					&response
+				);
+	}
+	pthread_mutex_unlock( get_mutex() );
 
 
 	if ( !res )
@@ -489,17 +518,21 @@ int kivfs_remote_close(kivfs_ofile_t *file){
 	kivfs_remote_flush( file );
 
 
-	/* Send CLOSE request */
-	res = kivfs_send_and_receive(
-			&connection,
-			kivfs_request(
-					sessid,
-					KIVFS_CLOSE,
-					KIVFS_CLOSE_FORMAT,
-					file->r_fd
-					),
-				&response
-			);
+	pthread_mutex_lock( get_mutex() );
+	{
+		/* Send CLOSE request */
+		res = kivfs_send_and_receive(
+				&connection,
+				kivfs_request(
+						sessid,
+						KIVFS_CLOSE,
+						KIVFS_CLOSE_FORMAT,
+						file->r_fd
+						),
+					&response
+				);
+	}
+	pthread_mutex_unlock( get_mutex() );
 
 	if ( !res )
 	{
@@ -529,19 +562,23 @@ int kivfs_remote_read( kivfs_ofile_t *file, char *buf, size_t size,
 	fprintf(stderr, VT_ACTION "SOCK [%d] port %u read request:\n" VT_NORMAL, file->connection.socket, file->connection.port);
 	pthread_mutex_lock( &file->mutex );
 
-	/* Send READ request */
-	res = kivfs_send_and_receive(
-			&file->connection,
-			kivfs_request(
-					sessid,
-					KIVFS_READ,
-					KIVFS_READ_FORMAT,
-					file->r_fd,
-					size,
-					0
-					),
-				&response
-			);
+	pthread_mutex_lock( get_mutex() );
+	{
+		/* Send READ request */
+		res = kivfs_send_and_receive(
+				&file->connection,
+				kivfs_request(
+						sessid,
+						KIVFS_READ,
+						KIVFS_READ_FORMAT,
+						file->r_fd,
+						size,
+						0
+						),
+					&response
+				);
+	}
+	pthread_mutex_unlock( get_mutex() );
 
 	if ( !res )
 	{
@@ -629,20 +666,22 @@ int kivfs_remote_fseek(kivfs_ofile_t *file, off_t offset){
 	int res;
 	kivfs_msg_t *response = NULL;
 
-	pthread_mutex_lock( &file->mutex );
-
-	/* Send WRITE request */
-	res = kivfs_send_and_receive(
-			&connection,
-			kivfs_request(
-					sessid,
-					KIVFS_FSEEK,
-					KIVFS_FSEEK_FORMAT,
-					file->r_fd,
-					offset
-					),
-				&response
-			);
+	pthread_mutex_lock( get_mutex() );
+	{
+		/* Send WRITE request */
+		res = kivfs_send_and_receive(
+				&connection,
+				kivfs_request(
+						sessid,
+						KIVFS_FSEEK,
+						KIVFS_FSEEK_FORMAT,
+						file->r_fd,
+						offset
+						),
+					&response
+				);
+	}
+	pthread_mutex_unlock( get_mutex() );
 
 	if ( !res )
 	{
@@ -657,8 +696,6 @@ int kivfs_remote_fseek(kivfs_ofile_t *file, off_t offset){
 	{
 		fprintf(stderr, "\033[31;1mFile fseek FAIL\033[0m\n");
 	}
-
-	pthread_mutex_unlock( &file->mutex );
 
 	kivfs_free_msg( response );
 	return res;
@@ -677,21 +714,23 @@ int kivfs_remote_write(kivfs_ofile_t *file, const char *buf, size_t size,
 	}
 
 	fprintf(stderr,"file: %p r_fd: %lu\n size: %lu\n", file, file->r_fd, size);
-	pthread_mutex_lock( &file->mutex );
 
-	/* Send WRITE request */
-	res = kivfs_send_and_receive(
-			&file->connection,
-			kivfs_request(
-					sessid,
-					KIVFS_WRITE,
-					KIVFS_WRITE_FORMAT,
-					file->r_fd,
-					size,
-					0 /* unused */
-					),
-				&response
-			);
+	pthread_mutex_lock( &file->mutex );
+	{
+		/* Send WRITE request */
+		res = kivfs_send_and_receive(
+				&file->connection,
+				kivfs_request(
+						sessid,
+						KIVFS_WRITE,
+						KIVFS_WRITE_FORMAT,
+						file->r_fd,
+						size,
+						0 /* unused */
+						),
+					&response
+				);
+	}
 
 	if ( !res )
 	{
@@ -737,11 +776,15 @@ int kivfs_remote_rename(const char *old_path, const char *new_path)
 	int res;
 	kivfs_msg_t *response = NULL;
 
-	res = kivfs_send_and_receive(
-			&connection,
-			kivfs_request(sessid, KIVFS_MOVE, KIVFS_MOVE_FORMAT, old_path, new_path),
-			&response
-			);
+	pthread_mutex_lock( get_mutex() );
+	{
+		res = kivfs_send_and_receive(
+				&connection,
+				kivfs_request(sessid, KIVFS_MOVE, KIVFS_MOVE_FORMAT, old_path, new_path),
+				&response
+				);
+	}
+	pthread_mutex_unlock( get_mutex() );
 
 	if( !res ){
 		res = response->head->return_code;
@@ -756,19 +799,23 @@ int kivfs_remote_chmod(const char *path, mode_t mode)
 	int res;
 	kivfs_msg_t *response = NULL;
 
-	res = kivfs_send_and_receive(
-			&connection,
-			kivfs_request(
-					sessid,
-					KIVFS_CHMOD,
-					KIVFS_CHMOD_FORMAT,
-					KIVFS_USR( mode ),
-					KIVFS_GRP( mode ),
-					KIVFS_OTH( mode ),
-					path
-					),
-			&response
-			);
+	pthread_mutex_lock( get_mutex() );
+	{
+		res = kivfs_send_and_receive(
+				&connection,
+				kivfs_request(
+						sessid,
+						KIVFS_CHMOD,
+						KIVFS_CHMOD_FORMAT,
+						KIVFS_USR( mode ),
+						KIVFS_GRP( mode ),
+						KIVFS_OTH( mode ),
+						path
+						),
+				&response
+				);
+	}
+	pthread_mutex_unlock( get_mutex() );
 
 	if( !res ){
 		res = response->head->return_code;

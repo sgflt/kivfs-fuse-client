@@ -72,16 +72,20 @@ void kivfs_login(const char *username, const char *password){
 	kivfs_msg_t *response = NULL;
 	kivfs_client_t *client = NULL;
 
-	res = kivfs_send_and_receive(
-			&connection,
-			kivfs_request(
-					sessid,
-					KIVFS_ID,
-					KIVFS_STRING_FORMAT,
-					username
-					),
-				&response
-			);
+	pthread_mutex_lock( get_mutex() );
+	{
+		res = kivfs_send_and_receive(
+				&connection,
+				kivfs_request(
+						sessid,
+						KIVFS_ID,
+						KIVFS_STRING_FORMAT,
+						username
+						),
+					&response
+				);
+	}
+	pthread_mutex_unlock( get_mutex() );
 
 	/* If received some data */
 	if ( !res )
@@ -103,7 +107,6 @@ void kivfs_login(const char *username, const char *password){
 			{
 				sessid = client->user->id;
 				fprintf(stderr, "Connection established with SESSID %d\n", sessid);
-				return;
 			}
 		}
 	}

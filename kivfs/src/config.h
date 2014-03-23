@@ -11,6 +11,8 @@
 
 #include <kivfs.h>
 
+#include "cache.h"
+
 /*---------------------------- Structures ----------------------------------*/
 
 /*---------------------------- CONSTANTS -----------------------------------*/
@@ -29,7 +31,13 @@ kivfs_connection_t *get_server(void);
  * Get actual path to cache.
  * @return path to cache
  */
-char * get_cache_path(void);
+const char * get_cache_dir(void);
+
+/**
+ * Get path to the database directory
+ * @return path to database directory
+ */
+const char *get_cache_db(void);
 
 /**
  * Concatenate kivfs path and cache path.
@@ -44,12 +52,14 @@ char * get_full_path(const char *path);
  */
 size_t get_cache_size();
 
+kivfs_cache_policy_t get_cache_policy(void);
 
 int get_retry_count(void);
 pthread_mutex_t * get_mutex(void);
 int is_connected(void);
 void set_retry_count(int count);
 void decrease_retry_count(void);
+void set_cache_policy(kivfs_cache_policy_t policy);
 void set_is_connected(int status);
 void set_server_ip(const char *ip);
 void set_server_port(const char *port);

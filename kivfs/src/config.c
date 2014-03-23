@@ -9,13 +9,15 @@
 #include <kivfs.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include "config.h"
+#include "cache.h"
 
-
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* Path should be shorter than PATH_MAX */
-static char *cache_path = "/tmp/fusetmp"; //TODO: nastavit v init
+static char *cache_dir = "/tmp/fusetmp";
+static char *cache_db = "/tmp";
 
 static kivfs_connection_t server = {
 		.ip ="192.168.2.14",
@@ -25,18 +27,25 @@ static kivfs_connection_t server = {
 };
 
 
-int retry_count = 0;
+static int retry_count = 0;
 
-int connection_status = 0;
+static int connection_status = 0;
+
+static kivfs_cache_policy_t cache_policy = 0;
 
 kivfs_connection_t * get_server(void)
 {
 	return &server;
 }
 
-char * get_cache_path(void)
+const char * get_cache_dir(void)
 {
-	return cache_path;
+	return cache_dir;
+}
+
+const char * get_cache_db(void)
+{
+	return cache_db;
 }
 
 size_t get_cache_size(void)
@@ -52,6 +61,11 @@ int get_retry_count(void)
 pthread_mutex_t * get_mutex(void)
 {
 	return &mutex;
+}
+
+kivfs_cache_policy_t get_cache_policy(void)
+{
+	return cache_policy;
 }
 
 int is_connected(void)
@@ -86,6 +100,10 @@ void set_is_connected(int status)
 	pthread_mutex_unlock( &mutex );
 }
 
+void set_cache_policy(kivfs_cache_policy_t policy)
+{
+	cache_policy = policy;
+}
 
 void set_server_ip(const char *ip)
 {
@@ -108,10 +126,10 @@ void set_server_port(const char *port)
  ---------------------------------------------------------------------------*/
 char * get_full_path(const char *path){
 	int path_len = strlen( path );
-	int cache_len = strlen( cache_path );
+	int cache_len = strlen( cache_dir );
 	char *full_path = malloc( path_len + cache_len + 1);
 
-	memcpy(full_path, cache_path, cache_len );
+	memcpy(full_path, cache_dir, cache_len );
 	memcpy(full_path + cache_len, path, path_len );
 
 	/* Terminate string with zero */

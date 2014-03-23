@@ -57,7 +57,7 @@ int kivfs_opt_proc(void *data, const char *arg, int key, struct fuse_args *outar
 }
 
 int init(){
-	const char *cache_path = (const char *)get_cache_path();
+	const char *cache_path = (const char *)get_cache_dir();
 
 	/* Create cache directory if it doesn't exist */
 	if( access(cache_path, F_OK) ){

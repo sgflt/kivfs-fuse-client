@@ -14,9 +14,6 @@
 
 /*---------------------------- Structures ----------------------------------*/
 
-#define KIVFS_FLG_WR 1
-#define KIVFS_FLG_ERR (1 << 1)
-
 typedef struct kivfs_ofile_st {
 	uint64_t fd;				/* local file descriptor				*/
 	uint64_t r_fd;			/* remote file descriptor				*/
@@ -35,6 +32,10 @@ typedef enum {
 } kivfs_sync_t;
 
 #define KIVFS_WRITE_CHMOD 459
+
+#define KIVFS_FLG_WR 1
+#define KIVFS_FLG_ERR (1 << 1)
+#define KIVFS_FLG_DELAYED (1 << 2)
 
 typedef int kivfs_version_t;
 

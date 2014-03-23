@@ -223,7 +223,17 @@ static int kivfs_write(const char *path, const char *buf, size_t size,
 	ssize_t _size = 0;
 	kivfs_ofile_t *file = (kivfs_ofile_t *)fi->fh;
 
-	if ( file->r_fd  && !(file->flags & KIVFS_FLG_ERR) )
+	/* XXX: file truncation workaround */
+	if ( !(file->flags & KIVFS_FLG_ERR) && (file->flags & KIVFS_FLG_DELAYED) )
+	{
+		int res = kivfs_remote_open(path, O_WRONLY, file);
+		if ( !res )
+		{
+			file->flags &= ~KIVFS_FLG_DELAYED;
+		}
+	}
+
+	if ( file->r_fd && !(file->flags & KIVFS_FLG_ERR) )
 	{
 		_size = kivfs_remote_write(file, buf, size, offset);
 		fprintf(stderr, "kivfs_write: REMOTE WRITE %ld bytes\n", _size);

@@ -35,7 +35,8 @@ void open_file_wronly(const char *path, kivfs_ofile_t *file, int flags)
 	if( is_connected() )
 	{
 		/* There is not necessary check errors, because cache is used */
-		kivfs_remote_open(path, flags, file);
+		//kivfs_remote_open(path, flags, file);
+		file->flags |= KIVFS_FLG_DELAYED;
 	}
 
 	open_local_copy(path, file, flags);

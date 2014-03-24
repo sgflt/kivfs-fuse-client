@@ -29,6 +29,7 @@ int mkdirs(const char *path){
 	if( access( dir, F_OK ) == -1 ){
 		mkdirs( dir );
 		if( mkdir( dir, S_IRWXU) ){
+			perror("mkdirs");
 			free( dir );
 			return -errno;
 		}

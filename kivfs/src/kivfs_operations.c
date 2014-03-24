@@ -46,20 +46,20 @@ static int kivfs_getattr(const char *path, struct stat *stbuf)
 	}
 	else
 	{
-		char *full_path = get_full_path( path );
+		//char *full_path = get_full_path( path );
 
 		/* If stat fails, retrieve info from db or remote server */
-		if ( stat(full_path, stbuf) )
-		{
-			perror("\033[31;1mlstat\033[0;0m ");
+		//if ( stat(full_path, stbuf) )
+		//{
+		//	perror("\033[31;1mlstat\033[0;0m ");
 
 			//TODO: remote get attr or cache dunno now
 			res = cache_getattr(path, stbuf);
 			//kivfs_file_t file;
 
-		}
+		//}
 
-		free( full_path );
+		//free( full_path );
 	}
 
 	return res;
@@ -276,7 +276,7 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 
 	print_open_mode(mode);
 
-	if ( mkdirs( path ) )
+	if ( mkdirs( full_path ) )
 	{
 		return -errno;
 	}

@@ -71,7 +71,7 @@ void open_local_copy(const char *path, kivfs_ofile_t *file, int flags)
 	print_open_mode( flags );
 	print_stat( &file->stbuf );
 
-	if ( mkdirs( path ) )
+	if ( mkdirs( full_path ) )
 	{
 		return;
 	}
@@ -114,7 +114,11 @@ void try_open_remote_with_cache(const char *path, kivfs_ofile_t *file,  struct f
 	{
 		file->stbuf.st_size = file_info->size; /* copy new size to proper truncation in cache */
 		open_with_cache(path, file, fi->flags);
-		cache_set_cached(path, 1);
+
+		if ( file->fd != -1 )
+		{
+			cache_set_cached(path, 1);
+		}
 	}
 	else
 	{

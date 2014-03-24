@@ -310,6 +310,7 @@ int kivfs_put_from_cache(const char *path)
 		fprintf(stderr, VT_ERROR "File close failed %s\n" VT_NORMAL, path);
 	}
 
+	kivfs_remote_chmod(path, file.stbuf.st_mode);
 	kivfs_free_msg( response );
 	return res;
 }

@@ -68,13 +68,14 @@ void open_local_copy(const char *path, kivfs_ofile_t *file, int flags)
 {
 	char *full_path = get_full_path( path );
 	print_open_mode( flags );
+	print_stat( &file->stbuf );
 
 	if ( mkdirs( path ) )
 	{
 		return;
 	}
 
-	file->fd = open(full_path, flags | file->flags, file->stbuf.st_mode);
+	file->fd = open(full_path, flags | file->flags);
 
 	if ( file->fd == -1 )
 	{
@@ -82,6 +83,7 @@ void open_local_copy(const char *path, kivfs_ofile_t *file, int flags)
 	}
 	else
 	{
+		fchmod(file->fd, file->stbuf.st_mode);
 		fprintf(stderr, VT_OK "kivfs_open: LOCAL OPEN OK | fd: %" PRIu64 "\n" VT_NORMAL, file->fd);
 	}
 
@@ -140,12 +142,13 @@ void open_file(const char *path, kivfs_ofile_t *file,  struct fuse_file_info *fi
 		case -ENOTCONN:
 			break;
 
+		/* delete file from cache, because it does not exist on the server */
 		case KIVFS_ERC_NO_SUCH_FILE:
+			unlink( full_path );
 			cache_remove( path );
 			return;
 
 		default:
-			//XXX: handle error and remove deleted file from db
 			fprintf(stderr, VT_ERROR "kivfs_open: REMOTE FILE INFO, abort open %d\n" VT_NORMAL, res);
 			return;
 	}

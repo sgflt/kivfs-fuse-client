@@ -9,7 +9,8 @@ C_SRCS += \
 ./src/prepared_stmts.c \
 ./src/connection.c \
 ./src/tools.c \
-./src/cleanup.c
+./src/cleanup.c \
+./src/stats.c
 
 OBJS += \
 $(OBJDIR)/main.o \
@@ -21,7 +22,8 @@ $(OBJDIR)/cache.o \
 $(OBJDIR)/prepared_stmts.o \
 $(OBJDIR)/connection.o \
 $(OBJDIR)/tools.o \
-$(OBJDIR)/cleanup.o
+$(OBJDIR)/cleanup.o \
+$(OBJDIR)/stats.o
 
 C_DEPS += \
 main.d \
@@ -33,7 +35,8 @@ cache.d \
 prepared_stmts.d \
 connection.d \
 tools.d \
-cleanup.d
+cleanup.d \
+stats.d
 
 
 # Each subdirectory must supply rules for building sources it contributes

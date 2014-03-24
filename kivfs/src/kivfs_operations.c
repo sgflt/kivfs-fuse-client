@@ -276,7 +276,7 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 
 	print_open_mode(mode);
 
-	if ( mkdirs( path ) )
+	if ( mkdirs( full_path ) )
 	{
 		return -errno;
 	}

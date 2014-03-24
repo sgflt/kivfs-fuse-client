@@ -21,7 +21,7 @@ static int fifo(const size_t size)
 	size_t used_size = cache_get_used_size();
 	sqlite3_stmt *stmt;
 
-	sqlite3_prepare_v2(cache_get_db(), "SELECT path,size,read_hits,write_hits FROM files WHERE cached = 1 ORDER BY atime", ZERO_TERMINATED, &stmt, NULL);
+	sqlite3_prepare_v2(cache_get_db(), "SELECT path,size,read_hits,write_hits FROM files WHERE cached = 1 ORDER BY atime DESC", ZERO_TERMINATED, &stmt, NULL);
 
 	fprintf(stderr, VT_INFO "Used: %lu | needed: %lu\n" VT_NORMAL, used_size, size);
 	while ( used_size + size > get_cache_size() )

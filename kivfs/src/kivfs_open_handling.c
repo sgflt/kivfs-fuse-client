@@ -49,6 +49,7 @@ static void open_with_cache(const char *path, kivfs_ofile_t *file,  int flags)
 	/* set the right size for fgetattr, otherwise first read of uncached file will fail*/
 	ftruncate(file->fd, file->stbuf.st_size);
 
+	fprintf(stderr, VT_INFO "Is file n cache? %s!\n" VT_NORMAL, cache_contains(path) ? "YES" : "NO");
 
 	/* if a file is already in cache, we don't have to do more space */
 	if ( !cache_contains(path) )

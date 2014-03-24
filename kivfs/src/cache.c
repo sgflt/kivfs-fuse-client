@@ -961,7 +961,9 @@ int cache_contains(const char *path)
 	int cached = 0;
 	sqlite3_stmt *stmt;
 
-	sqlite3_prepare_v2(db, "SELECT count(*) FROm files WHERE cached = 1 LIMIT 1", ZERO_TERMINATED, &stmt, NULL);
+	sqlite3_prepare_v2(db, "SELECT * FROM files WHERE cached = 1 AND path = :path", ZERO_TERMINATED, &stmt, NULL);
+
+	bind_text(stmt, ":path", path);
 
 	if( sqlite3_step( stmt ) == SQLITE_ROW )
 	{

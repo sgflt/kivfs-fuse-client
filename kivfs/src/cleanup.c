@@ -17,11 +17,11 @@
 
 static int fifo(const size_t size)
 {
-	int res = 0;
+	int res = KIVFS_OK;
 	size_t used_size = cache_get_used_size();
 	sqlite3_stmt *stmt;
 
-	sqlite3_prepare_v2(cache_get_db(), "SELECT path,size,read_hits,write_hits FROM files WHERE cached = 1 bORDER BY atime", ZERO_TERMINATED, &stmt, NULL);
+	sqlite3_prepare_v2(cache_get_db(), "SELECT path,size,read_hits,write_hits FROM files WHERE cached = 1 ORDER BY atime", ZERO_TERMINATED, &stmt, NULL);
 
 	fprintf(stderr, VT_INFO "Used: %lu | needed: %lu\n" VT_NORMAL, used_size, size);
 	while ( used_size + size > get_cache_size() )
@@ -63,7 +63,7 @@ int cleanup(const size_t size)
 	switch( get_cache_policy() )
 	{
 		case KIVFS_LFUSS:
-			return lfuss( size );
+			//return lfuss( size );
 
 		case KIVFS_FIFO:
 			return fifo( size );

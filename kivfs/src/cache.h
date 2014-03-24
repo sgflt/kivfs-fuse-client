@@ -20,8 +20,9 @@
 /*---------------------------- CONSTANTS -----------------------------------*/
 
 typedef enum {
-	KIVFS_FIFO = 0,
-	KIVFS_LFUSS = 1
+	KIVFS_FIFO,
+	KIVFS_LFUSS,
+	KIVFS_LRU
 } kivfs_cache_policy_t;
 /*---------------------------- Variables -----------------------------------*/
 

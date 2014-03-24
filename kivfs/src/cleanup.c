@@ -15,15 +15,13 @@
 #include "config.h"
 #include "main.h"
 
-static int fifo(const size_t size)
+static int purge_file(sqlite3_stmt *stmt, size_t size)
 {
-	int res = KIVFS_OK;
+	int res = 0;
 	size_t used_size = cache_get_used_size();
-	sqlite3_stmt *stmt;
-
-	sqlite3_prepare_v2(cache_get_db(), "SELECT path,size,read_hits,write_hits FROM files WHERE cached = 1 ORDER BY atime DESC", ZERO_TERMINATED, &stmt, NULL);
 
 	fprintf(stderr, VT_INFO "Used: %lu | needed: %lu\n" VT_NORMAL, used_size, size);
+
 	while ( used_size + size > get_cache_size() )
 	{
 		if ( sqlite3_step( stmt ) == SQLITE_ROW )
@@ -47,6 +45,33 @@ static int fifo(const size_t size)
 		}
 	}
 
+	return res;
+}
+
+static int fifo(const size_t size)
+{
+	int res = KIVFS_OK;
+
+	sqlite3_stmt *stmt;
+	sqlite3_prepare_v2(cache_get_db(), "SELECT path,size FROM files WHERE cached = 1", ZERO_TERMINATED, &stmt, NULL);
+
+	res = purge_file(stmt, size);
+
+
+	sqlite3_finalize( stmt );
+
+	return res;
+}
+
+static int lru(const size_t size)
+{
+	int res = KIVFS_OK;
+	sqlite3_stmt *stmt;
+
+	sqlite3_prepare_v2(cache_get_db(), "SELECT path,size FROM files WHERE cached = 1 ORDER BY atime DESC", ZERO_TERMINATED, &stmt, NULL);
+
+	res = purge_file(stmt, size);
+
 	sqlite3_finalize( stmt );
 
 	return res;
@@ -64,6 +89,9 @@ int cleanup(const size_t size)
 	{
 		case KIVFS_LFUSS:
 			//return lfuss( size );
+
+		case KIVFS_LRU:
+			return lru( size );
 
 		case KIVFS_FIFO:
 			return fifo( size );

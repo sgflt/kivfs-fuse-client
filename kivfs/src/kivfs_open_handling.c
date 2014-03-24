@@ -67,10 +67,14 @@ static void open_with_cache(const char *path, kivfs_ofile_t *file,  int flags)
 void open_local_copy(const char *path, kivfs_ofile_t *file, int flags)
 {
 	char *full_path = get_full_path( path );
-
 	print_open_mode( flags );
 
-	file->fd = open(full_path, flags | file->flags, file->stbuf.st_mode); /* Open if exists */
+	if ( mkdirs( path ) )
+	{
+		return;
+	}
+
+	file->fd = open(full_path, flags | file->flags, file->stbuf.st_mode);
 
 	if ( file->fd == -1 )
 	{
@@ -164,6 +168,7 @@ void open_file(const char *path, kivfs_ofile_t *file,  struct fuse_file_info *fi
 	/* if local file is older than remote or doesn't exist and online*/
 	if ( file_info && (file_info->version > cache_get_version( path ) || !file_exists) )
 	{
+		/* temporarily set local create flag */
 		file->flags = O_RDWR | ( !file_exists ? O_CREAT : 0);
 		try_open_remote_with_cache(path, file, fi, file_info);
 		file->flags = 0;

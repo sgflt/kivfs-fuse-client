@@ -562,7 +562,6 @@ int kivfs_remote_read( kivfs_ofile_t *file, char *buf, size_t size,
 	fprintf(stderr, VT_ACTION "SOCK [%d] port %u read request:\n" VT_NORMAL, file->connection.socket, file->connection.port);
 	pthread_mutex_lock( &file->mutex );
 
-
 	/* Send READ request */
 	res = kivfs_send_and_receive(
 			&file->connection,

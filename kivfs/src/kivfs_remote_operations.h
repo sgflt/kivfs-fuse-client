@@ -10,6 +10,7 @@
 #ifndef KIVFS_REMOTE_OPERATIONS_H_
 #define KIVFS_REMOTE_OPERATIONS_H_
 
+#include "kivfs_operations.h"
 
 /*---------------------------- Structures ----------------------------------*/
 

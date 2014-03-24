@@ -716,11 +716,11 @@ void cache_sync_modified()
 				break;
 
 			case KIVFS_ERC_NO_SUCH_DIR:
-				kivfs_remote_mkdir( path );
+				kivfs_remote_mkdir(path, mode);
 				break;
 
 			case KIVFS_ERC_NO_SUCH_FILE:
-				kivfs_remote_create(path, mode, NULL);
+				//kivfs_remote_create(path, mode, NULL);
 				break;
 
 			default:

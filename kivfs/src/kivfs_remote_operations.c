@@ -562,23 +562,19 @@ int kivfs_remote_read( kivfs_ofile_t *file, char *buf, size_t size,
 	fprintf(stderr, VT_ACTION "SOCK [%d] port %u read request:\n" VT_NORMAL, file->connection.socket, file->connection.port);
 	pthread_mutex_lock( &file->mutex );
 
-	pthread_mutex_lock( get_mutex() );
-	{
-		/* Send READ request */
-		res = kivfs_send_and_receive(
-				&file->connection,
-				kivfs_request(
-						sessid,
-						KIVFS_READ,
-						KIVFS_READ_FORMAT,
-						file->r_fd,
-						size,
-						0
-						),
-					&response
-				);
-	}
-	pthread_mutex_unlock( get_mutex() );
+	/* Send READ request */
+	res = kivfs_send_and_receive(
+			&file->connection,
+			kivfs_request(
+					sessid,
+					KIVFS_READ,
+					KIVFS_READ_FORMAT,
+					file->r_fd,
+					size,
+					0
+					),
+				&response
+			);
 
 	if ( !res )
 	{
@@ -716,21 +712,20 @@ int kivfs_remote_write(kivfs_ofile_t *file, const char *buf, size_t size,
 	fprintf(stderr,"file: %p r_fd: %lu\n size: %lu\n", file, file->r_fd, size);
 
 	pthread_mutex_lock( &file->mutex );
-	{
-		/* Send WRITE request */
-		res = kivfs_send_and_receive(
-				&file->connection,
-				kivfs_request(
-						sessid,
-						KIVFS_WRITE,
-						KIVFS_WRITE_FORMAT,
-						file->r_fd,
-						size,
-						0 /* unused */
-						),
-					&response
-				);
-	}
+
+	/* Send WRITE request */
+	res = kivfs_send_and_receive(
+			&file->connection,
+			kivfs_request(
+					sessid,
+					KIVFS_WRITE,
+					KIVFS_WRITE_FORMAT,
+					file->r_fd,
+					size,
+					0 /* unused */
+					),
+				&response
+			);
 
 	if ( !res )
 	{

@@ -152,6 +152,8 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 	}
 
 	fi->fh = (unsigned long)file;
+
+	/* fetch at least file mode for creating a new file na cache */
 	cache_getattr(path, &file->stbuf);
 
 	print_open_mode( fi->flags );
@@ -274,20 +276,14 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 
 	print_open_mode(mode);
 
-	file->fd = creat(full_path, mode);
+	file->fd = recreate_and_open(full_path , mode);
 
-	/* If create fails */
 	if ( file->fd == -1 )
 	{
-		/* Maybe some dirs are just in database */
-		file->fd = recreate_and_open(full_path , mode);
-
-		if ( file->fd == -1 )
-		{
-			free( full_path );
-			return -errno;
-		}
+		free( full_path );
+		return -errno;
 	}
+
 
 	free( full_path );
 
@@ -489,24 +485,16 @@ static int kivfs_mkdir(const char *path, mode_t mode)
 	int res;
 	char *full_path = get_full_path( path );
 
+	if ( mkdirs( full_path ) )
+	{
+		return -errno;
+	}
+
 	res = mkdir(full_path, mode);
 
-	if ( res == -1 )
+	if( res == -1 )
 	{
-		/* Maybe some dirs are just in database */
-		if ( mkdirs( full_path ) )
-		{
-			return -errno;
-		}
-
-		/* Try again */
-		res = mkdir(full_path, mode);
-
-		if ( res == -1 )
-		{
-			free( full_path );
-			return -errno;
-		}
+		res = -errno;
 	}
 
 	free( full_path );
@@ -522,7 +510,7 @@ static int kivfs_mkdir(const char *path, mode_t mode)
 	}
 
 	fprintf(stderr, "\033[33;1mdir exists\033[0;0m");
-	return -EEXIST;
+	return -res;
 }
 
 static int kivfs_rmdir(const char *path)

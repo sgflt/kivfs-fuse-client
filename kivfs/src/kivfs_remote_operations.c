@@ -53,7 +53,7 @@ int kivfs_remote_file_info(const char * path, kivfs_file_t **file)
 	int res;
 	kivfs_msg_t *response = NULL;
 
-	fprintf(stderr,"\033[33;1mDownloading file info %s\033[0m\n", path);
+	fprintf(stderr, VT_ACTION "Downloading file info %s\n" VT_NORMAL, path);
 
 	if ( !is_connected() )
 	{
@@ -77,7 +77,7 @@ int kivfs_remote_file_info(const char * path, kivfs_file_t **file)
 
 	if ( !res )
 	{
-		fprintf(stderr,"\033[33;1mFile info request sent %s\033[0m\n", path);
+		fprintf(stderr, VT_ACTION "File info request sent %s\n" VT_NORMAL, path);
 
 		res = response->head->return_code;
 
@@ -92,13 +92,17 @@ int kivfs_remote_file_info(const char * path, kivfs_file_t **file)
 
 			if ( !res )
 			{
-				fprintf(stderr,"\033[33;1mFile info complete %s\033[0m\n", path);
+				fprintf(stderr, VT_OK "File info complete %s\n" VT_NORMAL, path);
 				//kivfs_print_file( file );
 			}
 			else
 			{
-				printf("\033[33;1mFile not unpacked!\033[0m");
+				printf(VT_ERROR "File not unpacked!\033[0m" VT_NORMAL);
 			}
+		}
+		else
+		{
+			fprintf(stderr, VT_ERROR "File INFO ERROR: %d\n" VT_NORMAL, res);
 		}
 	}
 
@@ -233,7 +237,7 @@ int kivfs_put_from_cache(const char *path)
 
 	if ( res )
 	{
-		fprintf(stderr,"\033[31;1mFile open failed %s\033[0m\n", path);
+		fprintf(stderr, VT_ERROR "File open failed %s\n" VT_NORMAL, path);
 		return res;
 	}
 
@@ -302,7 +306,7 @@ int kivfs_put_from_cache(const char *path)
 
 	if ( res )
 	{
-		fprintf(stderr,"\033[31;1mFile close failed %s\033[0m\n", path);
+		fprintf(stderr, VT_ERROR "File close failed %s\n" VT_NORMAL, path);
 	}
 
 	kivfs_free_msg( response );
@@ -647,11 +651,11 @@ int kivfs_remote_create(const char *path, mode_t mode, kivfs_ofile_t *file){
 
 	if ( !res )
 	{
-		fprintf(stderr, "\033[35;1mFile CREATE OK.\033[0m\n");
+		fprintf(stderr, VT_OK "File CREATE OK.\n" VT_NORMAL);
 	}
 	else
 	{
-		fprintf(stderr, "\033[31;1mFile CREATE FAIL.\033[0m");
+		fprintf(stderr, VT_ERROR "File CREATE FAIL.\n" VT_NORMAL);
 	}
 
 	return res;
@@ -686,11 +690,11 @@ int kivfs_remote_fseek(kivfs_ofile_t *file, off_t offset){
 
 	if( !res )
 	{
-		fprintf(stderr, "\033[35;1mFile fseek OK\033[0m\n");
+		fprintf(stderr, VT_OK "File fseek OK\n" VT_NORMAL);
 	}
 	else
 	{
-		fprintf(stderr, "\033[31;1mFile fseek FAIL\033[0m\n");
+		fprintf(stderr, VT_ERROR "File fseek FAIL\n" VT_NORMAL);
 	}
 
 	kivfs_free_msg( response );
@@ -709,7 +713,7 @@ int kivfs_remote_write(kivfs_ofile_t *file, const char *buf, size_t size,
 		return -ENOTCONN;
 	}
 
-	fprintf(stderr,"file: %p r_fd: %lu\n size: %lu\n", file, file->r_fd, size);
+	fprintf(stderr, VT_INFO "file: %p r_fd: %lu\n size: %lu\n" VT_NORMAL, file, file->r_fd, size);
 
 	pthread_mutex_lock( &file->mutex );
 
@@ -743,7 +747,7 @@ int kivfs_remote_write(kivfs_ofile_t *file, const char *buf, size_t size,
 
 				if ( !res )
 				{
-					fprintf(stderr,"\033[31;1m File write result: %d | rc: %d\n",res, response->head->return_code);
+					fprintf(stderr, VT_INFO "File write result: %d | rc: %d\n" VT_NORMAL,res, response->head->return_code);
 					res =  response->head->return_code;
 				}
 			}
@@ -754,11 +758,11 @@ int kivfs_remote_write(kivfs_ofile_t *file, const char *buf, size_t size,
 
 	if ( res >= 0)
 	{
-		fprintf(stderr, "\033[35;1mFile write OK rc: %d | size: %ld \033[0m\n", res, bytes_sent);
+		fprintf(stderr, VT_OK "File write OK rc: %d | size: %ld\n" VT_NORMAL, res, bytes_sent);
 	}
 	else
 	{
-		fprintf(stderr, "\033[31;1mFile write FAIL %d | size: %ld \033[0m\n", res, bytes_sent);
+		fprintf(stderr, VT_ERROR "\033[31;1mFile write FAIL %d | size: %ld\n" VT_NORMAL, res, bytes_sent);
 	}
 
 	pthread_mutex_unlock( &file->mutex );

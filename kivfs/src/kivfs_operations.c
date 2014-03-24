@@ -276,7 +276,12 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 
 	print_open_mode(mode);
 
-	file->fd = recreate_and_open(full_path , mode);
+	if ( mkdirs( path ) )
+	{
+		return -errno;
+	}
+
+	file->fd = creat(full_path , mode);
 
 	if ( file->fd == -1 )
 	{
@@ -289,8 +294,8 @@ static int kivfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
 
 	if ( !cache_add(path, NULL) )
 	{
-//		if ( !kivfs_remote_create(path, mode, file) )
-		if ( !kivfs_remote_open(path, mode | O_RDWR, file) )
+		if ( !kivfs_remote_create(path, mode, file) )
+		//if ( !kivfs_remote_open(path, mode | O_RDWR, file) )
 		{
 			//TODO check type of error
 			cache_log(path, NULL, KIVFS_TOUCH);
@@ -501,7 +506,7 @@ static int kivfs_mkdir(const char *path, mode_t mode)
 
 	if ( !cache_add(path, NULL) )
 	{
-		if ( !kivfs_remote_mkdir( path ) || !kivfs_remote_chmod(path, mode) )
+		if ( !kivfs_remote_mkdir(path, mode) )
 		{
 			cache_log(path, NULL, KIVFS_MKDIR);
 		}

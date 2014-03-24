@@ -360,7 +360,7 @@ int kivfs_remote_sync(const char *path, const void *path_or_mode, KIVFS_VFS_COMM
 
 	switch( action ){
 		case KIVFS_MKDIR:
-			return kivfs_remote_mkdir( path );
+			return kivfs_remote_mkdir(path, (mode_t)path_or_mode);
 
 		case KIVFS_RMDIR:
 			return kivfs_remote_rmdir( path );
@@ -618,8 +618,10 @@ int kivfs_remote_read( kivfs_ofile_t *file, char *buf, size_t size,
 
 }
 
-int kivfs_remote_mkdir(const char *path){
-	return cmd_1arg(path, KIVFS_MKDIR);
+int kivfs_remote_mkdir(const char *path, mode_t mode){
+	int res = cmd_1arg(path, KIVFS_MKDIR);
+	kivfs_remote_chmod(path, mode);
+	return res;
 }
 
 int kivfs_remote_rmdir(const char *path){
@@ -643,12 +645,7 @@ int kivfs_remote_create(const char *path, mode_t mode, kivfs_ofile_t *file){
 		return -ENOTCONN;
 	}
 
-	//res = kivfs_remote_touch( path );
-
-	//if ( !res && file )
-	//{
-		res = kivfs_remote_open(path, O_RDWR, file);
-	//}
+	res = kivfs_remote_open(path, O_RDWR, file);
 
 	if ( !res )
 	{

@@ -75,10 +75,11 @@ int kivfs_remote_close(kivfs_ofile_t *file);
 /**
  * Create directory on the server.
  * @param path path to directory which should be created
+ * @param mode acces rights
  * @return KIVFS_OK or KIVFS_ERC_*
  * @see kivfs-constants.h
  */
-int kivfs_remote_mkdir(const char *path);
+int kivfs_remote_mkdir(const char *path, mode_t mode);
 
 /**
  * Remove directory from the server.

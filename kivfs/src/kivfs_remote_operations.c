@@ -16,6 +16,7 @@
 #include "kivfs_remote_operations.h"
 #include "connection.h"
 
+#define KIVFS_SPCL(mode) (((mode) >> 9) & 07)
 #define KIVFS_USR(mode) (((mode) >> 6) & 07)
 #define KIVFS_GRP(mode) (((mode) >> 3) & 07)
 #define KIVFS_OTH(mode) ((mode) & 07)
@@ -642,12 +643,12 @@ int kivfs_remote_create(const char *path, mode_t mode, kivfs_ofile_t *file){
 		return -ENOTCONN;
 	}
 
-	res = kivfs_remote_touch( path );
+	//res = kivfs_remote_touch( path );
 
-	if ( !res && file )
-	{
+	//if ( !res && file )
+	//{
 		res = kivfs_remote_open(path, O_RDWR, file);
-	}
+	//}
 
 	if ( !res )
 	{
@@ -657,6 +658,8 @@ int kivfs_remote_create(const char *path, mode_t mode, kivfs_ofile_t *file){
 	{
 		fprintf(stderr, VT_ERROR "File CREATE FAIL.\n" VT_NORMAL);
 	}
+
+	res = kivfs_remote_chmod(path, mode);
 
 	return res;
 }
@@ -798,6 +801,7 @@ int kivfs_remote_chmod(const char *path, mode_t mode)
 	int res;
 	kivfs_msg_t *response = NULL;
 
+	fprintf(stderr, VT_INFO "kivfs_remote_chmod: %s\n" VT_NORMAL, path);
 	pthread_mutex_lock( get_mutex() );
 	{
 		res = kivfs_send_and_receive(
@@ -809,6 +813,7 @@ int kivfs_remote_chmod(const char *path, mode_t mode)
 						KIVFS_USR( mode ),
 						KIVFS_GRP( mode ),
 						KIVFS_OTH( mode ),
+						KIVFS_SPCL( mode ),
 						path
 						),
 				&response
@@ -817,6 +822,7 @@ int kivfs_remote_chmod(const char *path, mode_t mode)
 	pthread_mutex_unlock( get_mutex() );
 
 	if( !res ){
+		fprintf(stderr, VT_OK "kivfs_remote_chmod:  OK %s\n" VT_NORMAL, path);
 		res = response->head->return_code;
 	}
 

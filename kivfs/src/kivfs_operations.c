@@ -424,16 +424,22 @@ static int kivfs_rename(const char *old_path, const char *new_path)
 	char *full_old_path = get_full_path( old_path );
 	char *full_new_path = get_full_path( new_path );
 
-	errno = 0;
+
+	if ( mkdirs( full_new_path ) )
+	{
+		return -errno;
+	}
 
 	/* if rename was succesfull or file is just in database */
+	if ( kivfs_remote_rename(old_path, new_path) )
+	{
+		cache_log(old_path, new_path, KIVFS_MOVE);
+	}
+
+
 	if ( !rename(full_old_path, full_new_path) || errno == ENOENT )
 	{
-		if ( !kivfs_remote_rename(old_path, new_path) )
-		{
-			cache_rename(old_path, new_path);
-			cache_log(old_path, new_path, KIVFS_MOVE);
-		}
+		cache_rename(old_path, new_path);
 	}
 
 	free( full_new_path );

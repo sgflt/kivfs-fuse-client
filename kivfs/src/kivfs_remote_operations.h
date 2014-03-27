@@ -11,6 +11,7 @@
 #define KIVFS_REMOTE_OPERATIONS_H_
 
 #include "kivfs_operations.h"
+#include "cleanup.h"
 
 /*---------------------------- Structures ----------------------------------*/
 
@@ -29,6 +30,7 @@
 #define KIVFS_FILE_INFO_FORMAT	KIVFS_STRING_FORMAT	/**< path				*/
 #define KIVFS_CHMOD_FORMAT		"%d %d %d %d %s"	/**< u g o path			*/
 
+#define	KIVFS_UPCK_HITS_FROMAT	"%llu %llu"			/**< read write			*/
 #define KIVFS_UPCK_SRV_FORMAT	"%llu %s %su"		/**< socket ip port		*/
 #define KIVFS_UPCK_DIR_FORMAT	"%files"			/**< kivfs_list_t		*/
 #define KIVFS_UPCK_CLNT_FORMAT	"%client"			/**< kivfs_client_t		*/
@@ -176,6 +178,8 @@ int kivfs_get_to_cache(const char *path );
  * @return errno or KIVFS_OK
  */
 int kivfs_put_from_cache(const char *path);
+
+int kivfs_remote_global_hits(kivfs_cfile_t *global_hits_server );
 
 /*----------------------------- Macros -------------------------------------*/
 

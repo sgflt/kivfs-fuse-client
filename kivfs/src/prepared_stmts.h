@@ -41,6 +41,7 @@
  void prepare_cache_get_used_size(sqlite3_stmt **stmt, sqlite3 *db);
  void prepare_cache_update_version(sqlite3_stmt **stmt, sqlite3 *db);
  void prepare_stats_insert(sqlite3_stmt **stmt, sqlite3 *db);
+ void prepare_cache_global_hits(sqlite3_stmt **stmt, sqlite3 *db);
 
 /*----------------------------- Macros -------------------------------------*/
 

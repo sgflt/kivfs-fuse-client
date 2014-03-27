@@ -16,6 +16,7 @@
 #include <pthread.h>
 #include <limits.h>
 
+#include "main.h"
 #include "config.h"
 #include "cache.h"
 #include "prepared_stmts.h"
@@ -44,6 +45,7 @@ static sqlite3_stmt *set_cached_stmt;
 static sqlite3_stmt *set_modified_stmt;
 static sqlite3_stmt *get_used_size_stmt;
 static sqlite3_stmt *update_version_stmt;
+static sqlite3_stmt *global_hits_stmt;
 
 /* Each function can be processed without race condition */
 static pthread_mutex_t add_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -72,7 +74,7 @@ static inline void cache_check_stmt(void (*initializer)(sqlite3_stmt **, sqlite3
 	}
 }
 
-void prepare_statements()
+static void prepare_statements(void)
 {
 	prepare_cache_add				(&add_stmt,					db);
 	prepare_cache_rename			(&rename_stmt,				db);
@@ -90,6 +92,38 @@ void prepare_statements()
 	prepare_cache_set_modified		(&set_modified_stmt,		db);
 	prepare_cache_get_used_size		(&get_used_size_stmt,		db);
 	prepare_cache_update_version	(&update_version_stmt,		db);
+	prepare_cache_global_hits		(&global_hits_stmt,			db);
+}
+
+static void create_triggers(void)
+{
+	int res;
+	char *sql = "CREATE  TRIGGER trigger_normalize_hits AFTER UPDATE	"
+				"ON files												"
+				"WHEN (SELECT max(read_hits) FROM files) > 15			"
+				"OR (SELECT max(write_hits) FROM files) > 15			"
+				"BEGIN													"
+				"	UPDATE files SET read_hits = read_hits / 2,			"
+				"	write_hits = write_hits / 2;						"
+				"END													";
+
+	res = sqlite3_exec(db,
+					sql,
+					NULL,
+					NULL,
+					NULL
+					);
+
+	if ( res != SQLITE_OK )
+	{
+		fprintf(stderr, VT_ERROR "trigger %s\n" VT_NORMAL, sqlite3_errmsg( db ));
+	}
+}
+
+static void create_indexes(void)
+{
+	sqlite3_exec(db, "CREATE  INDEX path_idx ON files (path)", NULL, NULL, NULL);
+	sqlite3_exec(db, "CREATE  INDEX cached_idx ON files (cached)", NULL, NULL, NULL);
 }
 
 int cache_init()
@@ -115,7 +149,7 @@ int cache_init()
 			return EXIT_FAILURE;
 		}
 
-		fprintf(stderr, "\033[31;1mcreating table\033[0;0m\n\n");
+		fprintf(stderr, VT_ACTION "mcreating table\n\n" VT_NORMAL);
 		res = sqlite3_exec(db,
 						"PRAGMA journal_mode=WAL",
 					    NULL,
@@ -125,7 +159,7 @@ int cache_init()
 
 		if ( res != SQLITE_OK )
 		{
-			fprintf(stderr,"\033[31;1mcache_init\033[0;0m %s\n", sqlite3_errmsg( db ));
+			fprintf(stderr, VT_ERROR "cache_init %s\n" VT_NORMAL, sqlite3_errmsg( db ));
 			return EXIT_FAILURE;
 		}
 
@@ -140,6 +174,8 @@ int cache_init()
 				"grp 			TEXT NOT NULL,"
 			    "read_hits 		INT NOT NULL DEFAULT ('0'),"
 				"write_hits 	INT NOT NULL DEFAULT ('0'),"
+				"srv_read_hits 	INT NOT NULL DEFAULT ('0'),"
+				"srv_write_hits INT NOT NULL DEFAULT ('0'),"
 				"cached 		INT NOT NULL DEFAULT ('0'),"
 				"modified		INT NOT NULL DEFAULT ('0'),"
 				"version 		INT NOT NULL)",
@@ -150,7 +186,7 @@ int cache_init()
 
 		if ( res != SQLITE_OK )
 		{
-			fprintf(stderr,"\033[31;1mcache_init\033[0;0m %s\n", sqlite3_errmsg( db ));
+			fprintf(stderr, VT_ERROR "cache_init %s\n" VT_NORMAL, sqlite3_errmsg( db ));
 			return EXIT_FAILURE;
 		}
 
@@ -165,12 +201,14 @@ int cache_init()
 				);
 
 		if( res != SQLITE_OK ){
-			fprintf(stderr,"\033[31;1mcache_init\033[0;0m %s\n", sqlite3_errmsg( db ));
+			fprintf(stderr, VT_ERROR "cache_init %s\n" VT_NORMAL, sqlite3_errmsg( db ));
 			return EXIT_FAILURE;
 		}
 	}
 
 	prepare_statements();
+	create_triggers();
+	create_indexes();
 
 	return res;
 }
@@ -235,23 +273,9 @@ int cache_add(const char *path, kivfs_file_t *file)
 		bind_text(add_stmt,	":group",		file->group);
 		bind_int(add_stmt,	":read_hits",	file->read_hits);
 		bind_int(add_stmt,	":write_hits",	file->write_hits);
-		//bind_int(add_stmt,	":type",		type);
 		bind_int(add_stmt,	":version",		file->version);
 
-		fprintf(stderr," %d %d %d %o\n"
-				"file type: %d\n"
-				"path: %s\n"
-				"version: %lu\n",
-				file->acl->owner,
-				file->acl->group,
-				file->acl->other,
-				(file->acl->owner << 9) | (file->acl->group << 6) | (file->acl->other),
-				file->type,
-				tmp,
-				file->version
-
-			);
-
+		kivfs_print_file( file );
 	}
 	else
 	{
@@ -272,9 +296,6 @@ int cache_add(const char *path, kivfs_file_t *file)
 		bind_int(add_stmt, ":mode", stbuf.st_mode);
 		bind_int(add_stmt, ":owner", stbuf.st_uid);
 		bind_int(add_stmt, ":group", stbuf.st_gid);
-		bind_int(add_stmt, ":read_hits", 0);
-		bind_int(add_stmt, ":write_hits", 0);
-		//bind_int(add_stmt, ":type", type);
 		bind_int(add_stmt, ":version", 1);
 
 		printf("\n\033[33;1m\tmode: %c%c%c %c%c%c %c%c%c  %o %o \033[0;0m\n",
@@ -923,11 +944,11 @@ void cache_set_cached(const char *path, int cached)
 
 	if( sqlite3_reset( set_cached_stmt ) != SQLITE_OK )
 	{
-		fprintf(stderr,"\033[31;1mcache_update_write_hits: faiulure%s\033[0;0m %s %d \n",  path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+		fprintf(stderr,"\033[31;1mcache_set_cached: faiulure%s\033[0;0m %s %d \n",  path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 	else
 	{
-		fprintf(stderr,"\033[35;1mcache_update_write_hits OK: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+		fprintf(stderr,"\033[35;1mcache_set_cached OK: %s\033[0;0m %s err: %d\n", path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 	}
 
 	pthread_mutex_unlock( &set_cached_mutex );
@@ -1014,5 +1035,25 @@ void cache_update_version(const char *path)
 	}
 
 	pthread_mutex_unlock( &update_version_mutex );
+}
+
+int cache_global_hits(kivfs_cfile_t *global_hits)
+{
+	sqlite3_step( global_hits_stmt );
+
+	global_hits->read_hits = sqlite3_column_int(global_hits_stmt, 0);
+	global_hits->write_hits = sqlite3_column_int(global_hits_stmt, 1);
+
+	if( sqlite3_reset( global_hits_stmt ) == SQLITE_OK )
+	{
+		fprintf(stderr,"\033[35;1mcache_global_hits OK:\033[0;0m %s err: %d | changes: %d\n", sqlite3_errmsg( db ), sqlite3_errcode( db ), sqlite3_changes(db));
+		return KIVFS_OK;
+	}
+	else
+	{
+		fprintf(stderr,"\033[31;1mcache_global_hits: faiulure\033[0;0m %s err: %d | changes: %d\n",  sqlite3_errmsg( db ), sqlite3_errcode( db ), sqlite3_changes(db));
+	}
+
+	return KIVFS_ERROR;
 }
 

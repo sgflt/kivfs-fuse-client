@@ -564,8 +564,6 @@ static int kivfs_utimens(const char *path, const struct timespec tv[2])
 
 static int kivfs_chmod(const char *path, mode_t mode)
 {
-	//TODO online chmod
-
 	char *full_path = get_full_path( path );
 
 	chmod(full_path, mode);

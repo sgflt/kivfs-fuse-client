@@ -31,7 +31,7 @@ static int retry_count = 0;
 
 static int connection_status = 0;
 
-static kivfs_cache_policy_t cache_policy = KIVFS_FIFO;
+static kivfs_cache_policy_t cache_policy = KIVFS_LFUSS;
 
 kivfs_connection_t * get_server(void)
 {

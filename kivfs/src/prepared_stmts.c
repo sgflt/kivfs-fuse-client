@@ -18,7 +18,7 @@
 
 void prepare_cache_add(sqlite3_stmt **stmt, sqlite3 *db){
 //TODO INSERT OR REPLACE ale nesmí se nahradit, když je v lokálu starší verzem jinak by to hlásilo aktuální a četla by se stará
-	char *sql = 	"INSERT INTO files(path, size, mtime, atime, mode, own, grp, read_hits, write_hits, version)"
+	char *sql = 	"INSERT INTO files(path, size, mtime, atime, mode, own, grp, srv_read_hits, srv_write_hits, version)"
 					"VALUES(:path, :size, :mtime, :atime, :mode, :owner, :group, :read_hits, :write_hits, :version)";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
@@ -349,4 +349,15 @@ void prepare_stats_insert(sqlite3_stmt **stmt, sqlite3 *db)
 		fprintf(stderr, VT_ERROR "prepare_stats_insert: %s\n" VT_NORMAL, sqlite3_errmsg( db ));
 	else
 		fprintf(stderr, VT_INFO "prepare_stats_insert: %s\n" VT_NORMAL, sqlite3_errmsg( db ));
+}
+
+void prepare_cache_global_hits(sqlite3_stmt **stmt, sqlite3 *db)
+{
+	char *sql = 	"SELECT sum(read_hits), sum(write_hits) FROM files;";
+
+	if ( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) )
+		fprintf(stderr, VT_ERROR "prepare_global_hits: %s\n" VT_NORMAL, sqlite3_errmsg( db ));
+	else
+		fprintf(stderr, VT_INFO "prepare_global_hits: %s\n" VT_NORMAL, sqlite3_errmsg( db ));
+
 }

@@ -56,7 +56,7 @@ static void open_with_cache(const char *path, kivfs_ofile_t *file,  int flags)
 	{
 		if ( cleanup( file->stbuf.st_size ) == KIVFS_OK )
 		{
-			fprintf(stderr, VT_INFO "FIFO DONE DONE. File size %ld | used: %ld | cache_size: %ld\n" VT_NORMAL, file->stbuf.st_size,cache_get_used_size(),get_cache_size());
+			fprintf(stderr, VT_INFO "DONE. File size %ld | used: %ld | cache_size: %ld\n" VT_NORMAL, file->stbuf.st_size,cache_get_used_size(),get_cache_size());
 		}
 	}
 
@@ -168,7 +168,7 @@ void open_file(const char *path, kivfs_ofile_t *file,  struct fuse_file_info *fi
 	{
 		stats_log(path, KIVFS_CACHE_HIT, file->stbuf.st_size);
 	}
-	else
+	else if ( file_info->size < get_cache_size() / 2 )
 	{
 		stats_log(path, KIVFS_CACHE_MISS, file->stbuf.st_size);
 	}

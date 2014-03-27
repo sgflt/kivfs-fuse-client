@@ -14,6 +14,7 @@
 #include <sqlite3.h>
 
 #include "kivfs_operations.h"
+#include "cleanup.h"
 
 /*---------------------------- Structures ----------------------------------*/
 
@@ -197,6 +198,8 @@ int cache_contains(const char *path);
  * @param path path to a file
  */
 void cache_update_version(const char*path);
+
+int cache_global_hits(kivfs_cfile_t *global_hits_client);
 
 
 /*----------------------------- Macros -------------------------------------*/

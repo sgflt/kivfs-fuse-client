@@ -14,9 +14,18 @@
 /*---------------------------- Structures ----------------------------------*/
 
 typedef struct kivfs_cfile_st {
-	uint64_t r_hits;
-	uint64_t w_hits;
 	char *path;
+	size_t size;
+
+	union
+	{
+		double weight;
+		struct
+		{
+			uint64_t read_hits;
+			uint64_t write_hits;
+		};
+	};
 } kivfs_cfile_t;
 
 /*---------------------------- CONSTANTS -----------------------------------*/

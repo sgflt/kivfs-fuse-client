@@ -89,7 +89,7 @@ int kivfs_remote_file_info(const char * path, kivfs_file_t **file)
 			if ( !res )
 			{
 				fprintf(stderr, VT_OK "File info complete %s\n" VT_NORMAL, path);
-				//kivfs_print_file( file );
+				kivfs_print_file( *file );
 			}
 			else
 			{
@@ -820,6 +820,46 @@ int kivfs_remote_chmod(const char *path, mode_t mode)
 	if( !res ){
 		fprintf(stderr, VT_OK "kivfs_remote_chmod:  OK %s\n" VT_NORMAL, path);
 		res = response->head->return_code;
+	}
+
+	kivfs_free_msg( response );
+	return res;
+}
+
+int kivfs_remote_global_hits(kivfs_cfile_t *global_hits)
+{
+	int res;
+	kivfs_msg_t *response = NULL;
+
+	fprintf(stderr, VT_INFO "kivfs_global_hits\n" VT_NORMAL);
+	pthread_mutex_lock( get_mutex() );
+	{
+		res = kivfs_send_and_receive(
+				&connection,
+				kivfs_request(
+						sessid,
+						KIVFS_GLOBAL_HITS,
+						NULL
+						),
+				&response
+				);
+	}
+	pthread_mutex_unlock( get_mutex() );
+
+	if( !res ){
+		fprintf(stderr, VT_OK "kivfs_global_hits:  OK\n" VT_NORMAL);
+		res = response->head->return_code;
+
+		if ( !res )
+		{
+			res = kivfs_unpack(
+						response->data,
+						response->head->data_size,
+						KIVFS_UPCK_HITS_FROMAT,
+						&global_hits->read_hits,
+						&global_hits->write_hits
+						);
+		}
 	}
 
 	kivfs_free_msg( response );

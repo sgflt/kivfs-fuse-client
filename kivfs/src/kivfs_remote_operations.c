@@ -56,11 +56,6 @@ int kivfs_remote_file_info(const char * path, kivfs_file_t **file)
 
 	fprintf(stderr, VT_ACTION "Downloading file info %s\n" VT_NORMAL, path);
 
-	if ( !is_connected() )
-	{
-		return -ENOTCONN;
-	}
-
 	pthread_mutex_lock( get_mutex() );
 	{
 		res = kivfs_send_and_receive(
@@ -109,7 +104,10 @@ int kivfs_remote_file_info(const char * path, kivfs_file_t **file)
 
 	if ( res == KIVFS_ERC_CONNECTION_TERMINATED || res == KIVFS_ERC_NETWORK_ERROR )
 	{
+		fprintf(stderr, VT_ERROR "Connection error -> call recovery: %d\n" VT_NORMAL, res);
+		set_is_connected( 0 );
 		kivfs_restore_connnection();
+		res = -ENOTCONN;
 	}
 
 	kivfs_free_msg( response );

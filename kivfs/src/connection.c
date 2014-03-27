@@ -9,12 +9,15 @@
 #include <kivfs.h>
 #include <stdint.h>
 #include <time.h>
+#include <math.h>
 
 #include "kivfs_operations.h"
 #include "kivfs_remote_operations.h"
 #include "connection.h"
 #include "config.h"
 #include "cache.h"
+
+static const int MAX_DELAY = 30;
 
 /**
  * Conditional variable for monitor. Signal on this variable wakes up a rescuer thread.
@@ -45,21 +48,32 @@ void * kivfs_reconnect(void *args)
 	for (;;)
 	{
 		if ( kivfs_connect(&connection, 1) != KIVFS_OK )
-		//if ( kivfs_connect_to(&connection.socket, connection.ip, connection.port, 1) != KIVFS_OK )
 		{
+
 			set_retry_count( 9000 );
 			set_is_connected( 0 );
 
-			sleep( delay *= 2 );
+			sleep( delay++ % MAX_DELAY  );
 		}
 		else
 		{
-			kivfs_login("root", "\0");
+			struct timeval timeout;
+			timeout.tv_sec = 1;
+			timeout.tv_usec = 0;
 
-			set_is_connected( 1 );
+			setsockopt(connection.socket, SOL_SOCKET, SO_RCVTIMEO, (const void *) &timeout, sizeof(timeout));
+			setsockopt(connection.socket, SOL_SOCKET, SO_SNDTIMEO, (const void *) &timeout, sizeof(timeout));
+
+			kivfs_login("root", "\0");
+			delay = 1;
+
 			fprintf(stderr, "LOGGED as root");
+			set_is_connected( 1 );
 			cache_sync();
+
+			pthread_mutex_lock( get_mutex() );
 			pthread_cond_wait(&try_connect, get_mutex());
+			pthread_mutex_unlock( get_mutex() );
 		}
 	}
 

@@ -872,6 +872,8 @@ int cache_update(const char *path, struct fuse_file_info *fi, kivfs_file_t *file
 		bind_int(update_stmt,	":atime",		file_info->atime);
 		bind_int(update_stmt,	":mode",		mode | (file_info->type == FILE_TYPE_DIRECTORY ? S_IFDIR : S_IFREG));
 		bind_int(update_stmt,	":version",		file_info->version);
+		bind_int(update_stmt,	":srv_read_hits",		file_info->read_hits);
+		bind_int(update_stmt,	":srv_write_hits",		file_info->write_hits);
 
 	}
 

@@ -119,7 +119,7 @@ void try_open_remote_with_cache(const char *path, kivfs_ofile_t *file,  struct f
 		{
 			kivfs_cfile_t cfile;
 			cfile.read_hits = file_info->read_hits;
-			cfile.write_hits = file_info->read_hits;
+			cfile.write_hits = file_info->write_hits;
 
 			cache_update_read_hits(path, cache_read_hits_fn()(&cfile));
 			cache_set_cached(path, 1);

@@ -25,7 +25,7 @@ double kivfs_lfuss_weight(kivfs_cfile_t *global_hits_client,
 	double g_cli = global_hits_client->read_hits + global_hits_client->write_hits;
 
 	fprintf(stderr, VT_INFO "f_r: %lu | f_w: %lu | g_srv [%f] | g_cli [%f]\n" VT_NORMAL,file_hits->read_hits, file_hits->write_hits, g_srv, g_cli);
-	return ((double)(file_hits->read_hits - file_hits->write_hits) / g_srv ) *  g_cli + 1;
+	return ((double)(file_hits->read_hits - file_hits->write_hits) / g_srv ) *  g_cli;
 }
 
 double lfuss_read_hits(const void *data)

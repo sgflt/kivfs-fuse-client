@@ -15,13 +15,14 @@
 /*---------------------------- Structures ----------------------------------*/
 
 typedef struct kivfs_ofile_st {
-	uint64_t fd;				/* local file descriptor				*/
-	uint64_t r_fd;			/* remote file descriptor				*/
+	uint64_t fd;					/* local file descriptor				*/
+	uint64_t r_fd;					/* remote file descriptor				*/
 	kivfs_connection_t connection;	/* connection to the fs layer			*/
 	pthread_mutex_t mutex;			/* connection can't be used parallel	*/
-	int flags;						/* flags						*/
 
 	struct stat stbuf;
+	int flags;						/* flags								*/
+
 } kivfs_ofile_t; 					/* "opened file" type					*/
 
 /*---------------------------- CONSTANTS -----------------------------------*/

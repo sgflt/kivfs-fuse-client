@@ -150,13 +150,13 @@ int cache_update(const char *path, struct fuse_file_info *fi, kivfs_file_t *file
  * Increment read hits by 1.
  * @param path path of an object which is beeing accessed
  */
-void cache_update_read_hits(const char *path );
+void cache_inc_read_hits(const char *path );
 
 /**
  * Increment rite hits by 1.
  * @param path path of an object which is beeing accessed
  */
-void cache_update_write_hits(const char *path );
+void cache_inc_write_hits(const char *path );
 
 /**
  * Obtain version of an object.
@@ -197,10 +197,13 @@ int cache_contains(const char *path);
  * This is useful if there is no connection and file has been modified.
  * @param path path to a file
  */
-void cache_update_version(const char*path);
+void cache_inc_version(const char*path);
 
 int cache_global_hits(kivfs_cfile_t *global_hits_client);
 
+void cache_update_read_hits(const char *path, double read_hits);
+
+double (*cache_read_hits_fn(void)) (const void *);
 
 /*----------------------------- Macros -------------------------------------*/
 

@@ -9,10 +9,6 @@
 #ifndef CONNECTION_H_
 #define CONNECTION_H_
 
-#include <kivfs.h>
-
-#include "kivfs_operations.h"
-
 /*---------------------------- Structures ----------------------------------*/
 
 /*---------------------------- CONSTANTS -----------------------------------*/

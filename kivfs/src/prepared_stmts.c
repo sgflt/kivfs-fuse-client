@@ -16,21 +16,21 @@
 #include "main.h"
 
 
-void prepare_cache_add(sqlite3_stmt **stmt, sqlite3 *db){
-//TODO INSERT OR REPLACE ale nesmí se nahradit, když je v lokálu starší verzem jinak by to hlásilo aktuální a četla by se stará
+void prepare_cache_add(sqlite3_stmt **stmt, sqlite3 *db)
+{
 	char *sql = 	"INSERT INTO files(path, size, mtime, atime, mode, own, grp, srv_read_hits, srv_write_hits, version)"
-					"VALUES(:path, :size, :mtime, :atime, :mode, :owner, :group, :read_hits, :write_hits, :version)";
+					"VALUES(:path, :size, :mtime, :atime, :mode, :owner, :group, :srv_read_hits, :srv_write_hits, :version)";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_cache_add:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_cache_add:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mpreparee_cache_add:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "preparee_cache_add:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
-void prepare_cache_rename(sqlite3_stmt **stmt, sqlite3 *db){
+void prepare_cache_rename(sqlite3_stmt **stmt, sqlite3 *db)
+{
 
-	//TODO merge with log rename
 	char *sql = 	"UPDATE files "
 					"SET "
 					"	path="
@@ -47,10 +47,10 @@ void prepare_cache_rename(sqlite3_stmt **stmt, sqlite3 *db){
 					"	path = :old_path";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_cache_rename:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_cache_rename:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_cache_rename:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_cache_rename:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 void prepare_cache_remove(sqlite3_stmt **stmt, sqlite3 *db){
@@ -58,10 +58,10 @@ void prepare_cache_remove(sqlite3_stmt **stmt, sqlite3 *db){
 	char *sql = 	"DELETE FROM files WHERE path LIKE :path";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_cache_remove:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_cache_remove:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_cache_remove:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_cache_remove:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 
@@ -70,10 +70,10 @@ void prepare_cache_readdir(sqlite3_stmt **stmt, sqlite3 *db){
 	char *sql = "SELECT path FROM files WHERE (path LIKE (:path || '/%') AND path NOT LIKE (:path || '/%/%')) or ('/' LIKE :path AND path NOT LIKE (:path || '%/%'))";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_cache_readdir:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_cache_readdir:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_cache_readdir:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_cache_readdir:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 void prepare_cache_getattr(sqlite3_stmt **stmt, sqlite3 *db){
@@ -81,10 +81,10 @@ void prepare_cache_getattr(sqlite3_stmt **stmt, sqlite3 *db){
 	char *sql = 	"SELECT atime, mtime, size, mode FROM files WHERE path = :path";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_cache_getattr:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_cache_getattr:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_cache_getattr:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_cache_getattr:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 /* WRITE conflict with TOUCH, TRUNCATE or another WRITE*/
@@ -107,10 +107,10 @@ void prepare_log_write(sqlite3_stmt **stmt, sqlite3 *db){
 		bind_int(*stmt, ":chmod", KIVFS_CHMOD);
 		bind_int(*stmt, ":write_chmod", KIVFS_WRITE_CHMOD);
 
-		fprintf(stderr,"\033[31;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 
@@ -121,10 +121,10 @@ void prepare_cache_log(sqlite3_stmt **stmt, sqlite3 *db){
 					"VALUES(:path, :new_path, :action)";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_cache_log:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_cache_log:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_cache_log:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_cache_log:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 /*----------------------------------------------------------------------------
@@ -179,10 +179,10 @@ void prepare_log_move(sqlite3_stmt **stmt, sqlite3 *db){
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
 		bind_int(*stmt, ":touch", KIVFS_TOUCH);
 		bind_int(*stmt, ":mkdir", KIVFS_MKDIR);
-		fprintf(stderr,"\033[31;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 
@@ -194,10 +194,10 @@ void prepare_log_remove(sqlite3_stmt **stmt, sqlite3 *db){
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
 		bind_int(*stmt, ":touch", KIVFS_TOUCH);
 		bind_int(*stmt, ":mkdir", KIVFS_MKDIR);
-		fprintf(stderr,"\033[31;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 void prepare_log_remote_remove(sqlite3_stmt **stmt, sqlite3 *db){
@@ -206,10 +206,10 @@ void prepare_log_remote_remove(sqlite3_stmt **stmt, sqlite3 *db){
 					"WHERE path = :path							";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
 
 }
 
@@ -219,20 +219,20 @@ void prepare_cache_file_mode(sqlite3_stmt **stmt, sqlite3 *db){
 	char *sql = 	"SELECT mode FROM files WHERE path = :path	";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_log_move:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 void prepare_cache_chmod(sqlite3_stmt **stmt, sqlite3 *db){
 	char *sql = 	"UPDATE files SET mode = :mode WHERE path = :path";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_cache_chmod:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_cache_chmod:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_cache_chmod:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_cache_chmod:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 void prepare_log_chmod(sqlite3_stmt **stmt, sqlite3 *db){
@@ -242,10 +242,10 @@ void prepare_log_chmod(sqlite3_stmt **stmt, sqlite3 *db){
 		bind_int(*stmt, ":write", KIVFS_WRITE);
 		bind_int(*stmt, ":write_chmod", KIVFS_WRITE_CHMOD);
 
-		fprintf(stderr,"\033[31;1mprepare_log_chmod:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_log_chmod:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_log_chmod:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_log_chmod:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 void prepare_cache_update(sqlite3_stmt **stmt, sqlite3 *db){
@@ -259,10 +259,10 @@ void prepare_cache_update(sqlite3_stmt **stmt, sqlite3 *db){
 					"WHERE path = :path					";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_cache_update:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_cache_update:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_cache_update:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_cache_update:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 void prepare_cache_get_version(sqlite3_stmt **stmt, sqlite3 *db)
@@ -270,32 +270,32 @@ void prepare_cache_get_version(sqlite3_stmt **stmt, sqlite3 *db)
 	char *sql = 	"SELECT version	FROM files WHERE path = :path ";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_cache_update:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_cache_update:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_cache_update:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_cache_update:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
-void prepare_cache_update_read_hits(sqlite3_stmt **stmt, sqlite3 *db)
+void prepare_cache_inc_read_hits(sqlite3_stmt **stmt, sqlite3 *db)
 {
 	char *sql = 	"UPDATE files SET read_hits = read_hits + 1 WHERE path = :path ";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_cache_read_hits:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_cache_read_hits:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_cache_read_hits:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_cache_read_hits:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
-void prepare_cache_update_write_hits(sqlite3_stmt **stmt, sqlite3 *db)
+void prepare_cache_inc_write_hits(sqlite3_stmt **stmt, sqlite3 *db)
 {
 	char *sql = 	"UPDATE files SET write_hits = write_hits + 1 WHERE path = :path ";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_cache_write_hits:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_cache_write_hits:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_cache_write_hits:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_cache_write_hits:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 void prepare_cache_set_cached(sqlite3_stmt **stmt, sqlite3 *db)
@@ -303,10 +303,21 @@ void prepare_cache_set_cached(sqlite3_stmt **stmt, sqlite3 *db)
 	char *sql = 	"UPDATE files SET cached = :cached WHERE path = :path ";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_set_cached:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_set_cached:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_set_cached:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_set_cached:\033[0;0m %s\n", sqlite3_errmsg( db ));
+}
+
+void prepare_cache_update_read_hits(sqlite3_stmt **stmt, sqlite3 *db)
+{
+	char *sql = 	"UPDATE files SET read_hits = :read_hits WHERE path = :path ";
+
+	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
+		fprintf(stderr, VT_OK "prepare_update_read_hits:\033[0;0m %s\n", sqlite3_errmsg( db ));
+	}
+	else
+		fprintf(stderr, VT_ERROR "prepare_update_read_hits:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 void prepare_cache_set_modified(sqlite3_stmt **stmt, sqlite3 *db)
@@ -314,10 +325,10 @@ void prepare_cache_set_modified(sqlite3_stmt **stmt, sqlite3 *db)
 	char *sql = 	"UPDATE files SET modified = :modified WHERE path = :path ";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_set_modified:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_set_modified:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_set_modified:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_set_modified:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 void prepare_cache_get_used_size(sqlite3_stmt **stmt, sqlite3 *db)
@@ -325,10 +336,10 @@ void prepare_cache_get_used_size(sqlite3_stmt **stmt, sqlite3 *db)
 	char *sql = 	"SELECT sum(size) FROM files WHERE cached = 1";
 
 	if( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) ){
-		fprintf(stderr,"\033[31;1mprepare_get_used_size:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_get_used_size:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	}
 	else
-		fprintf(stderr,"\033[33;1mprepare_get_used_size:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_get_used_size:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 void prepare_cache_update_version(sqlite3_stmt **stmt, sqlite3 *db)
@@ -336,9 +347,9 @@ void prepare_cache_update_version(sqlite3_stmt **stmt, sqlite3 *db)
 	char *sql = 	"UPDATE files SET version = version + 1 WHERE path = :path";
 
 	if ( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) )
-		fprintf(stderr,"\033[31;1mprepare_update_version:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_update_version:\033[0;0m %s\n", sqlite3_errmsg( db ));
 	else
-		fprintf(stderr,"\033[33;1mprepare_update_version:\033[0;0m %s\n", sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_update_version:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
 void prepare_stats_insert(sqlite3_stmt **stmt, sqlite3 *db)
@@ -346,18 +357,18 @@ void prepare_stats_insert(sqlite3_stmt **stmt, sqlite3 *db)
 	char *sql = 	"INSERT INTO stats (path, type, value) VALUES (:path, :type, :value)";
 
 	if ( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) )
-		fprintf(stderr, VT_ERROR "prepare_stats_insert: %s\n" VT_NORMAL, sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_stats_insert: %s\n" VT_NORMAL, sqlite3_errmsg( db ));
 	else
-		fprintf(stderr, VT_INFO "prepare_stats_insert: %s\n" VT_NORMAL, sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_stats_insert: %s\n" VT_NORMAL, sqlite3_errmsg( db ));
 }
 
 void prepare_cache_global_hits(sqlite3_stmt **stmt, sqlite3 *db)
 {
-	char *sql = 	"SELECT sum(read_hits), sum(write_hits) FROM files;";
+	char *sql = 	"SELECT sum(read_hits), sum(write_hits) FROM files WHERE cached = 1";
 
 	if ( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) )
-		fprintf(stderr, VT_ERROR "prepare_global_hits: %s\n" VT_NORMAL, sqlite3_errmsg( db ));
+		fprintf(stderr, VT_OK "prepare_global_hits: %s\n" VT_NORMAL, sqlite3_errmsg( db ));
 	else
-		fprintf(stderr, VT_INFO "prepare_global_hits: %s\n" VT_NORMAL, sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "prepare_global_hits: %s\n" VT_NORMAL, sqlite3_errmsg( db ));
 
 }

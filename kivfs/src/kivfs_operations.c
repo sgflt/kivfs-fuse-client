@@ -162,14 +162,14 @@ static int kivfs_open(const char *path, struct fuse_file_info *fi)
 	if ( fi->flags & O_WRONLY )
 	{
 		open_file_wronly(path, file, fi->flags);
-		cache_update_write_hits( path );
+		cache_inc_write_hits( path );
 	}
 
 	/* READ_ONLY or RDWR. Remote file is copied into cache. */
 	else
 	{
 		open_file(path, file, fi);
-		cache_update_read_hits( path );
+		cache_inc_read_hits( path );
 	}
 
 	free( full_path );
@@ -322,7 +322,7 @@ static int kivfs_access(const char *path, int mask)
 	if ( res )
 	{
 		fprintf(stderr, "\033[33;1m Access mode %o mask %o result %d \033[0;0m",cache_file_mode( path ), mask,  cache_file_mode( path ) & mask ? F_OK : -EACCES);
-		return cache_file_mode( path ) & mask ? F_OK : -EACCES;
+		return (cache_file_mode( path ) >> 6) & mask ? F_OK : -EACCES;
 	}
 
 	return res;
@@ -379,7 +379,7 @@ static int kivfs_release(const char *path, struct fuse_file_info *fi)
 		else
 		{
 			fprintf(stderr, "Version of a %s updated\n", path);
-			cache_update_version( path ); /* just update version because file is already synchronised */
+			cache_inc_version( path ); /* just update version because file is already synchronised */
 		}
 	}
 
@@ -421,6 +421,8 @@ static int kivfs_ftruncate(const char *path, off_t size, struct fuse_file_info *
 
 static int kivfs_rename(const char *old_path, const char *new_path)
 {
+	int res = KIVFS_OK;
+
 	char *full_old_path = get_full_path( old_path );
 	char *full_new_path = get_full_path( new_path );
 
@@ -430,21 +432,24 @@ static int kivfs_rename(const char *old_path, const char *new_path)
 		return -errno;
 	}
 
-	/* if rename was succesfull or file is just in database */
-	if ( kivfs_remote_rename(old_path, new_path) )
+	res = kivfs_remote_rename(old_path, new_path);
+	if ( res != KIVFS_OK && !(res == KIVFS_ERC_DIR_EXISTS || res == KIVFS_ERC_FILE_EXISTS))
 	{
 		cache_log(old_path, new_path, KIVFS_MOVE);
 	}
 
 
-	if ( !rename(full_old_path, full_new_path) || errno == ENOENT )
+	/* if rename was succesfull or file is just in database */
+	else if ( res == KIVFS_OK )
 	{
 		cache_rename(old_path, new_path);
 	}
 
+	rename(full_old_path, full_new_path);
+
 	free( full_new_path );
 	free( full_old_path );
-	return -errno;
+	return -kivfs2unix_err( res );
 }
 
 static int kivfs_lock(const char *path, struct fuse_file_info *fi, int cmd, struct flock *lock)
@@ -570,12 +575,16 @@ static int kivfs_utimens(const char *path, const struct timespec tv[2])
 
 static int kivfs_chmod(const char *path, mode_t mode)
 {
+	int res;
 	char *full_path = get_full_path( path );
 
 	chmod(full_path, mode);
 	cache_chmod(path, mode);
 
-	if( kivfs_remote_chmod(path, mode) != KIVFS_OK )
+	res = kivfs_remote_chmod(path, mode);
+
+	/* if file already have that permissions KIVFS_ERROR is returned, don't log */
+	if( res != KIVFS_OK && res != KIVFS_ERROR )
 	{
 		cache_log(path, NULL, KIVFS_CHMOD);
 	}

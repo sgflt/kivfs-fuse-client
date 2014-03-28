@@ -17,6 +17,9 @@
 #include "config.h"
 #include "main.h"
 #include "heap.h"
+#include "cache-algo-lfuss.h"
+#include "cache-algo-fifo.h"
+#include "cache-algo-common.h"
 
 int kivfs_hits_compare(void *hits_1, void *hits_2)
 {
@@ -31,66 +34,12 @@ void print_cfile(kivfs_cfile_t *cfile)
 	fprintf(stderr, VT_INFO "path: %s | w: %f\n" VT_NORMAL, cfile->path, cfile->weight);
 }
 
-static inline double kivfs_lfuss_weight(kivfs_cfile_t *global_hits_client,
-		kivfs_cfile_t *global_hits_server, kivfs_cfile_t *file_hits)
-{
-	return ((double)(file_hits->read_hits - file_hits->write_hits) /
-			(global_hits_server->read_hits + global_hits_server->write_hits)) *
-			(global_hits_client->read_hits + global_hits_client->write_hits) + 1;
-}
+
 
 void kivfs_free_cfile(kivfs_cfile_t *cfile)
 {
 	free( cfile->path );
 	free( cfile );
-}
-
-static int purge_file(sqlite3_stmt *stmt, size_t size)
-{
-	int res = 0;
-	size_t used_size = cache_get_used_size();
-
-	fprintf(stderr, VT_INFO "Used: %lu | needed: %lu\n" VT_NORMAL, used_size, size);
-
-	while ( used_size + size > get_cache_size() )
-	{
-		if ( sqlite3_step( stmt ) == SQLITE_ROW )
-		{
-			const char *path = (const char *)sqlite3_column_text(stmt, 0);
-			const char *full_path = get_full_path(path);
-
-			used_size -= sqlite3_column_int(stmt, 1);
-
-			unlink( full_path );
-
-			cache_set_cached(path, 0);
-			fprintf(stderr, "\033[34;1mFile %s removed from cache\n	\033[0m", path);
-			free( (void *)full_path );
-		}
-		else
-		{
-			fprintf(stderr, "\033[34;1mFile NOT removed from cache\n	\033[0m");
-			res = -1;
-			break;
-		}
-	}
-
-	return res;
-}
-
-static int fifo(const size_t size)
-{
-	int res = KIVFS_OK;
-
-	sqlite3_stmt *stmt;
-	sqlite3_prepare_v2(cache_get_db(), "SELECT path,size FROM files WHERE cached = 1", ZERO_TERMINATED, &stmt, NULL);
-
-	res = purge_file(stmt, size);
-
-
-	sqlite3_finalize( stmt );
-
-	return res;
 }
 
 static int lru(const size_t size)
@@ -107,7 +56,7 @@ static int lru(const size_t size)
 	return res;
 }
 
-static int lfuss(const size_t size)
+static int qlfuss(const size_t size)
 {
 	sqlite3_stmt *stmt;
 

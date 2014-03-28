@@ -9,6 +9,7 @@
 #ifndef PREPARED_STMTS_H_
 #define PREPARED_STMTS_H_
 
+#include <sqlite3.h>
 
 /*---------------------------- Structures ----------------------------------*/
 
@@ -34,18 +35,20 @@
  void prepare_log_chmod(sqlite3_stmt **stmt, sqlite3 *db);
  void prepare_cache_update(sqlite3_stmt **stmt, sqlite3 *db);
  void prepare_cache_get_version(sqlite3_stmt **stmt, sqlite3 *db);
- void prepare_cache_update_read_hits(sqlite3_stmt **stmt, sqlite3 *db);
- void prepare_cache_update_write_hits(sqlite3_stmt **stmt, sqlite3 *db);
+ void prepare_cache_inc_read_hits(sqlite3_stmt **stmt, sqlite3 *db);
+ void prepare_cache_inc_write_hits(sqlite3_stmt **stmt, sqlite3 *db);
  void prepare_cache_set_cached(sqlite3_stmt **stmt, sqlite3 *db);
  void prepare_cache_set_modified(sqlite3_stmt **stmt, sqlite3 *db);
  void prepare_cache_get_used_size(sqlite3_stmt **stmt, sqlite3 *db);
  void prepare_cache_update_version(sqlite3_stmt **stmt, sqlite3 *db);
  void prepare_stats_insert(sqlite3_stmt **stmt, sqlite3 *db);
  void prepare_cache_global_hits(sqlite3_stmt **stmt, sqlite3 *db);
+ void prepare_cache_update_read_hits(sqlite3_stmt **stmt, sqlite3 *db);
 
 /*----------------------------- Macros -------------------------------------*/
 
 #define bind_text(stmt, sql_var, var) sqlite3_bind_text(stmt, sqlite3_bind_parameter_index(stmt, sql_var), var, ZERO_TERMINATED, SQLITE_STATIC)
 #define bind_int(stmt, sql_var, var) sqlite3_bind_int(stmt, sqlite3_bind_parameter_index(stmt, sql_var), var)
+#define bind_real(stmt, sql_var, var) sqlite3_bind_double(stmt, sqlite3_bind_parameter_index(stmt, sql_var), var)
 
 #endif /* PREPARED_STMTS_H_ */

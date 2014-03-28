@@ -6,6 +6,9 @@ C_SRCS += \
 ./src/kivfs_open_handling.c \
 ./src/config.c \
 ./src/cache.c \
+./src/cache-algo-common.c \
+./src/cache-algo-fifo.c \
+./src/cache-algo-lfuss.c \
 ./src/prepared_stmts.c \
 ./src/connection.c \
 ./src/tools.c \
@@ -20,6 +23,9 @@ $(OBJDIR)/kivfs_remote_operations.o \
 $(OBJDIR)/kivfs_open_handling.o \
 $(OBJDIR)/config.o \
 $(OBJDIR)/cache.o \
+$(OBJDIR)/cache-algo-common.o \
+$(OBJDIR)/cache-algo-fifo.o \
+$(OBJDIR)/cache-algo-lfuss.o \
 $(OBJDIR)/prepared_stmts.o \
 $(OBJDIR)/connection.o \
 $(OBJDIR)/tools.o \
@@ -34,6 +40,9 @@ kivfs_remote_operations.d \
 kivfs_open_handling.d \
 config.d \
 cache.d \
+cache-algo-common.d \
+cache-algo-fifo.d \
+cache-algo-lfuss.d \
 prepared_stmts.d \
 connection.d \
 tools.d \

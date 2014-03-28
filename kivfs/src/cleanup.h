@@ -22,7 +22,10 @@ typedef struct kivfs_cfile_st {
 		double weight;
 		struct
 		{
-			uint64_t read_hits;
+			union {
+					uint64_t read_hits; /**< server side read_hits are 64bit int 	*/
+					double c_read_hits; /**< client side read_hits are double 		*/
+			};
 			uint64_t write_hits;
 		};
 	};

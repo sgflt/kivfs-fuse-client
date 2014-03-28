@@ -1101,13 +1101,13 @@ int cache_global_hits(kivfs_cfile_t *global_hits)
 {
 	sqlite3_step( global_hits_stmt );
 
-	global_hits->read_hits = sqlite3_column_int(global_hits_stmt, 0);
+	global_hits->c_read_hits = sqlite3_column_double(global_hits_stmt, 0);
 	global_hits->write_hits = sqlite3_column_int(global_hits_stmt, 1);
 
 	if( sqlite3_reset( global_hits_stmt ) == SQLITE_OK )
 	{
 		fprintf(stderr, VT_OK "cache_global_hits OK: %s err: %d | changes: %d\n" VT_NORMAL, sqlite3_errmsg( db ), sqlite3_errcode( db ), sqlite3_changes(db));
-		fprintf(stderr, VT_WARNING "g_r %lu | g_w %lu\n" VT_NORMAL, global_hits->read_hits, global_hits->write_hits);
+		fprintf(stderr, VT_WARNING "g_r %f | g_w %lu\n" VT_NORMAL, global_hits->c_read_hits, global_hits->write_hits);
 		return KIVFS_OK;
 	}
 	else

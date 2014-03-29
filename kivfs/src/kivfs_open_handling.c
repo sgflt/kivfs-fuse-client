@@ -37,6 +37,7 @@ void open_file_wronly(const char *path, kivfs_ofile_t *file, int flags)
 		/* There is not necessary check errors, because cache is used */
 		//kivfs_remote_open(path, flags, file);
 		file->flags |= KIVFS_FLG_DELAYED;
+		file->r_fd = KIVFS_FLG_DELAYED;
 	}
 
 	open_local_copy(path, file, flags);
@@ -173,7 +174,7 @@ void open_file(const char *path, kivfs_ofile_t *file,  struct fuse_file_info *fi
 	{
 		stats_log(path, KIVFS_CACHE_HIT, file->stbuf.st_size);
 	}
-	else if ( file_info->size < get_cache_size() / 2 )
+	else if ( file_info && file_info->size < get_cache_size() / 2 )
 	{
 		stats_log(path, KIVFS_CACHE_MISS, file->stbuf.st_size);
 	}

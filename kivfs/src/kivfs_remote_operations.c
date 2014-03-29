@@ -351,6 +351,14 @@ int kivfs_remote_readdir(const char *path, kivfs_list_t **files){
 		}
 	}
 
+	if ( res == KIVFS_ERC_CONNECTION_TERMINATED || res == KIVFS_ERC_NETWORK_ERROR )
+	{
+		fprintf(stderr, VT_ERROR "Connection error -> call recovery: %d\n" VT_NORMAL, res);
+		set_is_connected( 0 );
+		kivfs_restore_connnection();
+		res = -ENOTCONN;
+	}
+
 	kivfs_free_msg( response );
 	return res;
 }
@@ -446,8 +454,8 @@ int kivfs_remote_open(const char *path, mode_t mode, kivfs_ofile_t *file){
 
 			if ( !res )
 			{
-				struct timeval timeout; // 10 msec
-				timeout.tv_sec = 1;
+				struct timeval timeout;
+				timeout.tv_sec = 10;
 				timeout.tv_usec = 0;
 
 				setsockopt(file->connection.socket, SOL_SOCKET, SO_RCVTIMEO, (const void *) &timeout, sizeof(timeout));

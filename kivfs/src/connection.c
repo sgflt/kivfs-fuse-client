@@ -58,7 +58,7 @@ void * kivfs_reconnect(void *args)
 		else
 		{
 			struct timeval timeout;
-			timeout.tv_sec = 1;
+			timeout.tv_sec = 10;
 			timeout.tv_usec = 0;
 
 			setsockopt(connection.socket, SOL_SOCKET, SO_RCVTIMEO, (const void *) &timeout, sizeof(timeout));

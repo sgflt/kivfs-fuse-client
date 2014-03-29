@@ -19,8 +19,8 @@
 /*---------------------------- Variables -----------------------------------*/
 
 /*------------------- Functions: ANSI C prototypes -------------------------*/
-double kivfs_lfuss_weight(kivfs_ofile_t *global_hits_client,
-		kivfs_ofile_t *global_hits_server, kivfs_ofile_t *file_hits);
+double kivfs_lfuss_weight(kivfs_cfile_t *global_hits_client,
+		kivfs_cfile_t *global_hits_server, kivfs_cfile_t *file_hits);
 
 double lfuss_read_hits(const void *data);
 

@@ -50,6 +50,7 @@ static sqlite3_stmt *get_used_size_stmt;
 static sqlite3_stmt *update_version_stmt;
 static sqlite3_stmt *global_hits_stmt;
 static sqlite3_stmt *update_read_hits_stmt;
+static sqlite3_stmt *update_time_stmt;
 
 /* Each function can be processed without race condition */
 static pthread_mutex_t add_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -69,6 +70,7 @@ static pthread_mutex_t set_cached_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t set_modified_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t inc_version_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t update_read_hits_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t update_time_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static double (*read_hits_fn) (const void *);
 
@@ -120,6 +122,7 @@ static void prepare_statements(void)
 	prepare_cache_update_version	(&update_version_stmt,		db);
 	prepare_cache_global_hits		(&global_hits_stmt,			db);
 	prepare_cache_update_read_hits	(&update_read_hits_stmt, 	db);
+	prepare_cache_update_time		(&update_time_stmt, 		db);
 }
 
 static void create_triggers(void)
@@ -546,7 +549,7 @@ int cache_readdir(const char *path, void *buf, fuse_fill_dir_t filler)
 
 	fprintf(stderr, VT_CYAN "Cache readdir before: %s %s err: %d %s\n" VT_NORMAL, path, sqlite3_errmsg( db ), sqlite3_errcode( db ), path);
 
-	while ( sqlite3_step( readdir_stmt ) == SQLITE_ROW )//basename( (char *)sqlite3_column_text(stmt, 0) )
+	while ( sqlite3_step( readdir_stmt ) == SQLITE_ROW )
 	{
 		fprintf(stderr, VT_ACTION "Cache readdir step: %s %s err: %d %s\n" VT_NORMAL, path, sqlite3_errmsg( db ), sqlite3_errcode( db ), basename( (char *)sqlite3_column_text(readdir_stmt, 0) ));
 		if ( filler(buf, basename( (char *)sqlite3_column_text(readdir_stmt, 0) ) , NULL, 0) )
@@ -554,6 +557,7 @@ int cache_readdir(const char *path, void *buf, fuse_fill_dir_t filler)
 			break;
 		}
 	}
+
 	fprintf(stderr, VT_ERROR "Cache readdir: %s %s err: %d\n" VT_NORMAL, path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
 
 	if ( sqlite3_reset( readdir_stmt ) == SQLITE_OK )
@@ -842,7 +846,7 @@ int cache_chmod(const char *path, mode_t mode)
 
 	sqlite3_step( chmod_stmt );
 
-	if( sqlite3_reset( readdir_stmt ) == SQLITE_OK )
+	if( sqlite3_reset( chmod_stmt ) == SQLITE_OK )
 	{
 			pthread_mutex_unlock( &chmod_mutex );
 			fprintf(stderr, VT_OK "Cache chmod OK: %s %s err: %d\n" VT_NORMAL, path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
@@ -854,6 +858,33 @@ int cache_chmod(const char *path, mode_t mode)
 	}
 
 	pthread_mutex_unlock( &chmod_mutex );
+
+	return -EPERM;
+}
+
+int cache_update_time(const char *path, const struct timespec tv[2])
+{
+
+	pthread_mutex_lock( &update_time_mutex );
+
+	bind_text(update_time_stmt, ":path", path);
+	bind_int(update_time_stmt, ":atime", tv[0].tv_sec);
+	bind_int(update_time_stmt, ":mtime", tv[1].tv_sec);
+
+	sqlite3_step( update_time_stmt );
+
+	if( sqlite3_reset( update_time_stmt ) == SQLITE_OK )
+	{
+			pthread_mutex_unlock( &update_time_mutex );
+			fprintf(stderr, VT_OK "Cache utime OK: %s %s err: %d\n" VT_NORMAL, path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+			return KIVFS_OK;
+	}
+	else
+	{
+		fprintf(stderr, VT_ERROR "Cache utime failure: %s %s err: %d\n" VT_NORMAL, path, sqlite3_errmsg( db ), sqlite3_errcode( db ));
+	}
+
+	pthread_mutex_unlock( &update_time_mutex );
 
 	return -EPERM;
 }

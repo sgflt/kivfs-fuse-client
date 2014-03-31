@@ -23,7 +23,8 @@
 typedef enum {
 	KIVFS_FIFO,
 	KIVFS_LFUSS,
-	KIVFS_LRU
+	KIVFS_LRU,
+	KIVFS_QLFUSS
 } kivfs_cache_policy_t;
 /*---------------------------- Variables -----------------------------------*/
 
@@ -204,6 +205,8 @@ int cache_global_hits(kivfs_cfile_t *global_hits_client);
 void cache_update_read_hits(const char *path, double read_hits);
 
 double (*cache_read_hits_fn(void)) (const void *);
+
+int cache_update_time(const char *path, const struct timespec tv[2]);
 
 /*----------------------------- Macros -------------------------------------*/
 

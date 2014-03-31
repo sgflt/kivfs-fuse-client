@@ -31,6 +31,8 @@
 #define concat(cache_path, path) { strcat(full_path, cache_path); strcat(full_path, path); }
 #define CONFLICT ".conflict"
 
+#define READDIR_DELAY 60
+
 static int kivfs_getattr(const char *path, struct stat *stbuf)
 {
 	int res = 0;
@@ -46,20 +48,7 @@ static int kivfs_getattr(const char *path, struct stat *stbuf)
 	}
 	else
 	{
-		//char *full_path = get_full_path( path );
-
-		/* If stat fails, retrieve info from db or remote server */
-		//if ( stat(full_path, stbuf) )
-		//{
-		//	perror("\033[31;1mlstat\033[0;0m ");
-
-			//TODO: remote get attr or cache dunno now
-			res = cache_getattr(path, stbuf);
-			//kivfs_file_t file;
-
-		//}
-
-		//free( full_path );
+		res = cache_getattr(path, stbuf);
 	}
 
 	return res;
@@ -88,55 +77,40 @@ static int kivfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file
 static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		 off_t offset, struct fuse_file_info *fi)
 {
+	struct stat stbuf;
+	cache_getattr(path, &stbuf);
+
+	filler(buf, ".", NULL, 0);
+	filler(buf, "..", NULL, 0);
+
+	if ( stbuf.st_atim.tv_sec - time(NULL) > READDIR_DELAY )
+	{
+		struct timespec tv[2];
 		kivfs_list_t *files;
 
-		filler(buf, ".", NULL, 0);
-		filler(buf, "..", NULL, 0);
+		clock_gettime(CLOCK_REALTIME, &tv[0]);
+		tv[1] = stbuf.st_mtim;
 
-		if ( !kivfs_remote_readdir(path, &files) )
+		kivfs_remote_readdir(path, &files);
+
+		for (kivfs_adt_item_t *item = files->first; item != NULL; item = item->next)
 		{
-			for (kivfs_adt_item_t *item = files->first; item != NULL; item = item->next)
+			if( cache_add(path, item->data) != KIVFS_OK )
 			{
-				if( cache_add(path, item->data) != KIVFS_OK )
-				{
-					kivfs_version_t version = cache_get_version( path );
-
-					fprintf(stderr, "\033[33;1mFILE exists in database\n\t remote version: %" PRIu64 " | local version: %d\n\033[0m",((kivfs_file_t *)(item->data))->version, version);
-
-					/* This is buggy as hell
-					if ( version != ((kivfs_file_t *)(item->data))->version )
-					{
-						fprintf(stderr, "\033[33;1mFILE has different version\n\033[0m");
-
-						char *new_full_path;
-						char *new_path = (char *)malloc(strlen(path) + strlen(CONFLICT) + 1);
-						char *full_path = get_full_path( path );
-
-						*new_path = 0;
-
-						strcat(new_path, path);
-						strcat(new_path, CONFLICT);
-
-						new_full_path = get_full_path( new_path );
-
-						rename(full_path, new_full_path);
-						cache_rename(path, new_path);
-
-						free( new_path );
-						free( new_full_path );
-
-						cache_add(path, item->data);
-					}*/
-				}
+				kivfs_version_t version = cache_get_version( path );
+				fprintf(stderr, "\033[33;1mFILE exists in database\n\t remote version: %" PRIu64 " | local version: %d\n\033[0m",((kivfs_file_t *)(item->data))->version, version);
 			}
 		}
-		else
-		{
-			fprintf(stderr, "\033[33;1mkivfs remote readdir error");
-		}
 
-		/* Read dir from cache, because user want to see all available files */
-		return cache_readdir(path, buf, filler);
+		cache_update_time(path, tv);
+	}
+	else
+	{
+		fprintf(stderr, "\033[33;1mkivfs remote readdir error");
+	}
+
+	/* Read dir from cache, because user want to see all available files */
+	return cache_readdir(path, buf, filler);
 }
 
 static int kivfs_open(const char *path, struct fuse_file_info *fi)
@@ -568,6 +542,8 @@ static int kivfs_utimens(const char *path, const struct timespec tv[2])
 	char *full_path = get_full_path( path );
 
 	utimensat(0, full_path, tv, AT_SYMLINK_NOFOLLOW);
+
+	cache_update_time(path, tv);
 
 	free( full_path );
 	return 0; // Don't worry about ENOENT

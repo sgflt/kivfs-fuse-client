@@ -77,13 +77,14 @@ static int kivfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file
 static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		 off_t offset, struct fuse_file_info *fi)
 {
-	struct stat stbuf;
+	struct stat stbuf = {0};
+
 	cache_getattr(path, &stbuf);
 
 	filler(buf, ".", NULL, 0);
 	filler(buf, "..", NULL, 0);
 
-	if ( stbuf.st_atim.tv_sec - time(NULL) > READDIR_DELAY )
+	if ( time(NULL) - stbuf.st_atim.tv_sec > READDIR_DELAY )
 	{
 		struct timespec tv[2];
 		kivfs_list_t *files;
@@ -98,6 +99,7 @@ static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			if( cache_add(path, item->data) != KIVFS_OK )
 			{
 				kivfs_version_t version = cache_get_version( path );
+				//cache_update_srv_hits()
 				fprintf(stderr, "\033[33;1mFILE exists in database\n\t remote version: %" PRIu64 " | local version: %d\n\033[0m",((kivfs_file_t *)(item->data))->version, version);
 			}
 		}
@@ -106,7 +108,7 @@ static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	}
 	else
 	{
-		fprintf(stderr, "\033[33;1mkivfs remote readdir error");
+		fprintf(stderr, VT_CYAN "Readdir not performed due DELAY\n" VT_NORMAL);
 	}
 
 	/* Read dir from cache, because user want to see all available files */

@@ -352,6 +352,16 @@ void prepare_cache_update_version(sqlite3_stmt **stmt, sqlite3 *db)
 		fprintf(stderr, VT_ERROR "prepare_update_version:\033[0;0m %s\n", sqlite3_errmsg( db ));
 }
 
+void prepare_cache_update_time(sqlite3_stmt **stmt, sqlite3 *db)
+{
+	char *sql = 	"UPDATE files SET atime = :atime, mtime = :mtime WHERE path = :path";
+
+	if ( !sqlite3_prepare_v2(db, sql, ZERO_TERMINATED, stmt, NULL) )
+		fprintf(stderr, VT_OK "prepare_update_time:\033[0;0m %s\n", sqlite3_errmsg( db ));
+	else
+		fprintf(stderr, VT_ERROR "prepare_update_time:\033[0;0m %s\n", sqlite3_errmsg( db ));
+}
+
 void prepare_stats_insert(sqlite3_stmt **stmt, sqlite3 *db)
 {
 	char *sql = 	"INSERT INTO stats (path, type, value) VALUES (:path, :type, :value)";

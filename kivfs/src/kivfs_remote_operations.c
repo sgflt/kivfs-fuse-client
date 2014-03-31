@@ -169,7 +169,7 @@ int kivfs_get_to_cache(const char *path)
 		/* Check to errors on server side */
 		if ( !res )
 		{
-			enum { BUF_SIZE = 2 };
+			enum { BUF_SIZE = TRANSFER_BUFFER };
 
 			char buf[BUF_SIZE];
 			ssize_t bytes_received_now;
@@ -266,7 +266,7 @@ int kivfs_put_from_cache(const char *path)
 		/* Check to errors on server side */
 		if ( !res )
 		{
-			enum { BUF_SIZE = 2 };
+			enum { BUF_SIZE = TRANSFER_BUFFER };
 
 			char buf[BUF_SIZE];
 			ssize_t bytes_sent_now;

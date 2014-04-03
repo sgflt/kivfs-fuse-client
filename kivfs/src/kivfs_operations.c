@@ -574,7 +574,6 @@ static int kivfs_chmod(const char *path, mode_t mode)
 static void *kivfs_init(struct fuse_conn_info *conn)
 {
 	kivfs_session_init();
-	set_cache_policy( KIVFS_LFUSS );
 	stats_init();
 	return NULL;
 }

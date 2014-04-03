@@ -52,6 +52,8 @@ int kivfs_opt_proc(void *data, const char *arg, int key, struct fuse_args *outar
 		case KEY_POLICY:
 			if ( strcmp(arg, "fifo") == 0 )	{ set_cache_policy( KIVFS_FIFO ); return EXIT_SUCCESS; }
 			else if ( strcmp(arg, "lfuss") == 0 ) { set_cache_policy( KIVFS_LFUSS ); return EXIT_SUCCESS; }
+			else if ( strcmp(arg, "lfu") == 0 ) { set_cache_policy( KIVFS_LFU ); return EXIT_SUCCESS; }
+			else if ( strcmp(arg, "lru") == 0 ) { set_cache_policy( KIVFS_LRU ); return EXIT_SUCCESS; }
 			else if ( strcmp(arg, "wlfuss") == 0 ) { set_cache_policy( KIVFS_WLFUSS ); return EXIT_SUCCESS; }
 			return EXIT_FAILURE;
 

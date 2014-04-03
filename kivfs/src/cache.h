@@ -24,7 +24,8 @@ typedef enum {
 	KIVFS_FIFO,
 	KIVFS_LFUSS,
 	KIVFS_LRU,
-	KIVFS_QLFUSS
+	KIVFS_QLFUSS,
+	KIVFS_WLFUSS
 } kivfs_cache_policy_t;
 /*---------------------------- Variables -----------------------------------*/
 

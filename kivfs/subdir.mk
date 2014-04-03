@@ -9,6 +9,7 @@ C_SRCS += \
 ./src/cache-algo-common.c \
 ./src/cache-algo-fifo.c \
 ./src/cache-algo-lfuss.c \
+./src/cache-algo-wlfuss.c \
 ./src/prepared_stmts.c \
 ./src/connection.c \
 ./src/tools.c \
@@ -26,6 +27,7 @@ $(OBJDIR)/cache.o \
 $(OBJDIR)/cache-algo-common.o \
 $(OBJDIR)/cache-algo-fifo.o \
 $(OBJDIR)/cache-algo-lfuss.o \
+$(OBJDIR)/cache-algo-wlfuss.o \
 $(OBJDIR)/prepared_stmts.o \
 $(OBJDIR)/connection.o \
 $(OBJDIR)/tools.o \
@@ -43,6 +45,7 @@ cache.d \
 cache-algo-common.d \
 cache-algo-fifo.d \
 cache-algo-lfuss.d \
+cache-algo-wlfuss.d \
 prepared_stmts.d \
 connection.d \
 tools.d \

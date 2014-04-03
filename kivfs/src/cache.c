@@ -24,6 +24,7 @@
 #include "kivfs_remote_operations.h"
 #include "cleanup.h"
 #include "cache-algo-lfuss.h"
+#include "cache-algo-wlfuss.h"
 #include "cache-algo-common.h"
 
 //XXX: odstranit nepotřebné includy
@@ -91,6 +92,10 @@ static void choose_read_hits_algo(void)
 			read_hits_fn = lfuss_read_hits;
 			break;
 
+		case KIVFS_WLFUSS:
+			read_hits_fn = wlfuss_read_hits;
+			break;
+
 		default:
 			read_hits_fn = read_hit_1;
 			break;
@@ -128,7 +133,7 @@ static void prepare_statements(void)
 static void create_triggers(void)
 {
 	int res;
-	char *sql = "CREATE  TRIGGER trigger_normalize_hits AFTER UPDATE	"
+	char *sql = "CREATE TRIGGER IF NOT EXISTS trigger_normalize_hits AFTER UPDATE	"
 				"ON files												"
 				"WHEN (SELECT max(read_hits) FROM files) > 15			"
 				"OR (SELECT max(write_hits) FROM files) > 15			"
@@ -146,14 +151,27 @@ static void create_triggers(void)
 
 	if ( res != SQLITE_OK )
 	{
-		fprintf(stderr, VT_ERROR "trigger %s\n" VT_NORMAL, sqlite3_errmsg( db ));
+		fprintf(stderr, VT_ERROR "%s\n" VT_NORMAL, sqlite3_errmsg( db ));
 	}
 }
 
 static void create_indexes(void)
 {
-	sqlite3_exec(db, "CREATE  INDEX path_idx ON files (path)", NULL, NULL, NULL);
-	sqlite3_exec(db, "CREATE  INDEX cached_idx ON files (cached)", NULL, NULL, NULL);
+	int res;
+
+	res = sqlite3_exec(db, "CREATE INDEX IF NOT EXISTS path_idx ON files (path)", NULL, NULL, NULL);
+
+	if ( res != SQLITE_OK )
+	{
+		fprintf(stderr, VT_ERROR "%s\n" VT_NORMAL, sqlite3_errmsg( db ));
+	}
+
+	res = sqlite3_exec(db, "CREATE INDEX IF NOT EXISTS cached_idx ON files (cached)", NULL, NULL, NULL);
+
+	if ( res != SQLITE_OK )
+	{
+		fprintf(stderr, VT_ERROR "%s\n" VT_NORMAL, sqlite3_errmsg( db ));
+	}
 }
 
 int cache_init()

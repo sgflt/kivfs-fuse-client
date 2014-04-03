@@ -18,6 +18,7 @@
 #include "main.h"
 #include "heap.h"
 #include "cache-algo-lfuss.h"
+#include "cache-algo-wlfuss.h"
 #include "cache-algo-fifo.h"
 #include "cache-algo-common.h"
 
@@ -138,6 +139,12 @@ int cleanup(const size_t size)
 
 		case KIVFS_FIFO:
 			return fifo( size );
+
+		case KIVFS_QLFUSS:
+			return qlfuss( size );
+
+		case KIVFS_WLFUSS:
+			return wlfuss( size );
 
 		default:
 			return -ENOSYS;

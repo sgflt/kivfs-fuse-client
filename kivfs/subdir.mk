@@ -10,6 +10,8 @@ C_SRCS += \
 ./src/cache-algo-fifo.c \
 ./src/cache-algo-lfuss.c \
 ./src/cache-algo-wlfuss.c \
+./src/cache-algo-lru.c \
+./src/cache-algo-lfu.c \
 ./src/prepared_stmts.c \
 ./src/connection.c \
 ./src/tools.c \
@@ -28,6 +30,8 @@ $(OBJDIR)/cache-algo-common.o \
 $(OBJDIR)/cache-algo-fifo.o \
 $(OBJDIR)/cache-algo-lfuss.o \
 $(OBJDIR)/cache-algo-wlfuss.o \
+$(OBJDIR)/cache-algo-lru.o \
+$(OBJDIR)/cache-algo-lfu.o \
 $(OBJDIR)/prepared_stmts.o \
 $(OBJDIR)/connection.o \
 $(OBJDIR)/tools.o \
@@ -46,6 +50,8 @@ cache-algo-common.d \
 cache-algo-fifo.d \
 cache-algo-lfuss.d \
 cache-algo-wlfuss.d \
+cache-algo-lru.d \
+cache-algo-lfu.d \
 prepared_stmts.d \
 connection.d \
 tools.d \
@@ -57,7 +63,7 @@ heap.d
 # Each subdirectory must supply rules for building sources it contributes
 ./obj/%.o: ./src/%.c
 	@echo 'Building file: $<'
-	@echo 'Invoking: C Comoiler'
+	@echo 'Invoking: C Compiler'
 	$(CC) -O0 -ggdb3 -Wall -pedantic -std=gnu11 -c -fmessage-length=0 `pkg-config fuse sqlite3 libssl --cflags` -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '

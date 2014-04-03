@@ -16,7 +16,7 @@
 
 double read_hit_1(const void *path)
 {
-	return 1;
+	return 0.0;
 }
 
 

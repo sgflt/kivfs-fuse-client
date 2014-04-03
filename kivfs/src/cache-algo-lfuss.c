@@ -11,6 +11,7 @@
 #include <math.h>
 
 #include "cache-algo-common.h"
+#include "cache-algo-lfu.h"
 #include "prepared_stmts.h"
 #include "kivfs_remote_operations.h"
 #include "cache.h"
@@ -53,14 +54,5 @@ double lfuss_read_hits(const void *data)
 
 int lfuss(const size_t size)
 {
-	int res = KIVFS_OK;
-	sqlite3_stmt *stmt;
-
-	sqlite3_prepare_v2(cache_get_db(), "SELECT path,size FROM files WHERE cached = 1 ORDER BY read_hits ASC", ZERO_TERMINATED, &stmt, NULL);
-
-	res = purge_file(stmt, size);
-
-	sqlite3_finalize( stmt );
-
-	return res;
+	return lfu( size );
 }

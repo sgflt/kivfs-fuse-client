@@ -20,6 +20,8 @@
 #include "cache-algo-lfuss.h"
 #include "cache-algo-wlfuss.h"
 #include "cache-algo-fifo.h"
+#include "cache-algo-lru.h"
+#include "cache-algo-lfu.h"
 #include "cache-algo-common.h"
 
 int kivfs_hits_compare(void *hits_1, void *hits_2)
@@ -43,19 +45,6 @@ void kivfs_free_cfile(kivfs_cfile_t *cfile)
 	free( cfile );
 }
 
-static int lru(const size_t size)
-{
-	int res = KIVFS_OK;
-	sqlite3_stmt *stmt;
-
-	sqlite3_prepare_v2(cache_get_db(), "SELECT path,size FROM files WHERE cached = 1 ORDER BY atime DESC", ZERO_TERMINATED, &stmt, NULL);
-
-	res = purge_file(stmt, size);
-
-	sqlite3_finalize( stmt );
-
-	return res;
-}
 
 static int qlfuss(const size_t size)
 {
@@ -136,6 +125,9 @@ int cleanup(const size_t size)
 
 		case KIVFS_LRU:
 			return lru( size );
+
+		case KIVFS_LFU:
+			return lfu( size );
 
 		case KIVFS_FIFO:
 			return fifo( size );

@@ -21,31 +21,38 @@
 enum{
 	KEY_HELP,
 	KEY_IP,
-	KEY_PORT
+	KEY_PORT,
+	KEY_POLICY
 };
 
 int kivfs_opt_proc(void *data, const char *arg, int key, struct fuse_args *outargs){
 
 	printf("\033[31;mparser %d\033[0;m\n", key);
+
+	while ( arg && *arg != '=' )
+	{
+		arg++;
+	}
+
+	arg++;
+
 	switch( key ){
 		case KEY_HELP:
 			kivfs_help();
 			return EXIT_SUCCESS;
 
 		case KEY_IP:
-			while ( arg && *arg != '=' )
-			{
-				arg++;
-			}
-			set_server_ip( ++arg );
+			set_server_ip( arg );
 			return EXIT_SUCCESS;
 
 		case KEY_PORT:
-			while ( arg && *arg != '=' )
-			{
-				arg++;
-			}
-			set_server_port( ++arg );
+			set_server_port( arg );
+			return EXIT_SUCCESS;
+
+		case KEY_POLICY:
+			if ( strcmp(arg, "fifo") == 0 )	{ set_cache_policy( KIVFS_FIFO ); return EXIT_SUCCESS; }
+			else if ( strcmp(arg, "lfuss") == 0 ) { set_cache_policy( KIVFS_LFUSS ); return EXIT_SUCCESS; }
+			else if ( strcmp(arg, "wlfuss") == 0 ) { set_cache_policy( KIVFS_WLFUSS ); return EXIT_SUCCESS; }
 			return EXIT_SUCCESS;
 
 		default:
@@ -100,6 +107,7 @@ int main(int argc, char **argv){
 	     FUSE_OPT_KEY("--ip=%s",	KEY_IP),
 	     FUSE_OPT_KEY("--host=%s",	KEY_IP),
 	     FUSE_OPT_KEY("--port=%i",	KEY_PORT),
+	     FUSE_OPT_KEY("--policy=%s", KEY_POLICY),
 	     FUSE_OPT_END
 	};
 

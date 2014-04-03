@@ -53,7 +53,7 @@ int kivfs_opt_proc(void *data, const char *arg, int key, struct fuse_args *outar
 			if ( strcmp(arg, "fifo") == 0 )	{ set_cache_policy( KIVFS_FIFO ); return EXIT_SUCCESS; }
 			else if ( strcmp(arg, "lfuss") == 0 ) { set_cache_policy( KIVFS_LFUSS ); return EXIT_SUCCESS; }
 			else if ( strcmp(arg, "wlfuss") == 0 ) { set_cache_policy( KIVFS_WLFUSS ); return EXIT_SUCCESS; }
-			return EXIT_SUCCESS;
+			return EXIT_FAILURE;
 
 		default:
 			fprintf(stderr, "Unknown option %s\n", arg);
@@ -88,16 +88,10 @@ void kivfs_help(){
 
 int main(int argc, char **argv){
 
-	if( argc <= 1){
+	if ( argc <= 1) {
 		kivfs_help();
 		return EXIT_FAILURE;
 	}
-
-	if( init() ){
-		fprintf(stderr, "Initialisation failed!\n");
-		return EXIT_FAILURE;
-	}
-
 
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 
@@ -114,6 +108,11 @@ int main(int argc, char **argv){
 
 	fuse_opt_parse(&args, NULL, kivfs_opts, kivfs_opt_proc);
 	fuse_opt_add_arg(&args, "-obig_writes");
+
+	if ( init() ) {
+		fprintf(stderr, "Initialisation failed!\n");
+		return EXIT_FAILURE;
+	}
 
 	return fuse_main(args.argc, args.argv, &kivfs_operations, NULL);
 }

@@ -22,7 +22,8 @@ enum{
 	KEY_HELP,
 	KEY_IP,
 	KEY_PORT,
-	KEY_POLICY
+	KEY_POLICY,
+	KEY_SIZE
 };
 
 int kivfs_opt_proc(void *data, const char *arg, int key, struct fuse_args *outargs){
@@ -47,6 +48,10 @@ int kivfs_opt_proc(void *data, const char *arg, int key, struct fuse_args *outar
 
 		case KEY_PORT:
 			set_server_port( arg );
+			return EXIT_SUCCESS;
+
+		case KEY_SIZE:
+			set_cache_size( strtoul(arg, NULL, 10) );
 			return EXIT_SUCCESS;
 
 		case KEY_POLICY:
@@ -104,6 +109,7 @@ int main(int argc, char **argv){
 	     FUSE_OPT_KEY("--host=%s",	KEY_IP),
 	     FUSE_OPT_KEY("--port=%i",	KEY_PORT),
 	     FUSE_OPT_KEY("--policy=%s", KEY_POLICY),
+	     FUSE_OPT_KEY("--size=%s", KEY_SIZE),
 	     FUSE_OPT_END
 	};
 

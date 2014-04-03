@@ -63,6 +63,7 @@ void set_cache_policy(kivfs_cache_policy_t policy);
 void set_is_connected(int status);
 void set_server_ip(const char *ip);
 void set_server_port(const char *port);
+void set_cache_size(size_t size);
 /*----------------------------- Macros -------------------------------------*/
 
 

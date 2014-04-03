@@ -31,6 +31,8 @@ static int retry_count = 0;
 
 static int connection_status = 0;
 
+static size_t cache_size = 128 * 1024 * 1024;
+
 static kivfs_cache_policy_t cache_policy = KIVFS_LFUSS;
 
 kivfs_connection_t * get_server(void)
@@ -50,7 +52,7 @@ const char * get_cache_db(void)
 
 size_t get_cache_size(void)
 {
-	return 128;
+	return cache_size;
 }
 
 int get_retry_count(void)
@@ -103,6 +105,11 @@ void set_is_connected(int status)
 void set_cache_policy(kivfs_cache_policy_t policy)
 {
 	cache_policy = policy;
+}
+
+void set_cache_size(size_t size)
+{
+	cache_size = size;
 }
 
 void set_server_ip(const char *ip)

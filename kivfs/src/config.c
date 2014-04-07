@@ -109,7 +109,7 @@ void set_cache_policy(kivfs_cache_policy_t policy)
 
 void set_cache_size(size_t size)
 {
-	cache_size = size;
+	cache_size = size * 1024 * 1024; /* size in mebibytes */
 }
 
 void set_server_ip(const char *ip)

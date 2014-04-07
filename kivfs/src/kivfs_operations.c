@@ -87,24 +87,27 @@ static int kivfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	if ( time(NULL) - stbuf.st_atim.tv_sec > READDIR_DELAY )
 	{
 		struct timespec tv[2];
-		kivfs_list_t *files;
+		kivfs_list_t *files = NULL;
 
 		clock_gettime(CLOCK_REALTIME, &tv[0]);
 		tv[1] = stbuf.st_mtim;
 
-		kivfs_remote_readdir(path, &files);
-
-		for (kivfs_adt_item_t *item = files->first; item != NULL; item = item->next)
+		if ( !kivfs_remote_readdir(path, &files) )
 		{
-			if( cache_add(path, item->data) != KIVFS_OK )
+			for (kivfs_adt_item_t *item = files->first; item != NULL; item = item->next)
 			{
-				kivfs_version_t version = cache_get_version( path );
-				//cache_update_srv_hits()
-				fprintf(stderr, "\033[33;1mFILE exists in database\n\t remote version: %" PRIu64 " | local version: %d\n\033[0m",((kivfs_file_t *)(item->data))->version, version);
+				if( cache_add(path, item->data) != KIVFS_OK )
+				{
+					kivfs_version_t version = cache_get_version( path );
+					//cache_update_srv_hits()
+					fprintf(stderr, "\033[33;1mFILE exists in database\n\t remote version: %" PRIu64 " | local version: %d\n\033[0m",((kivfs_file_t *)(item->data))->version, version);
+				}
 			}
+
+			cache_update_time(path, tv);
 		}
 
-		cache_update_time(path, tv);
+		kivfs_destroy_list(files, (void (*)(void *))kivfs_free_file);
 	}
 	else
 	{

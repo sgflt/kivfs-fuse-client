@@ -89,14 +89,17 @@ static void choose_read_hits_algo(void)
 	switch ( policy )
 	{
 		case KIVFS_LFUSS:
+			fprintf(stderr, VT_YELLOW "LFUSS POLICY %d\n" VT_NORMAL, policy);
 			read_hits_fn = lfuss_read_hits;
 			break;
 
 		case KIVFS_WLFUSS:
+			fprintf(stderr, VT_YELLOW "WLFUSS POLICY %d\n" VT_NORMAL, policy);
 			read_hits_fn = wlfuss_read_hits;
 			break;
 
 		default:
+			fprintf(stderr, VT_YELLOW "DEFAULT POLICY %d\n" VT_NORMAL, policy);
 			read_hits_fn = read_hit_1;
 			break;
 	}
@@ -211,21 +214,21 @@ int cache_init()
 		}
 
 		res = sqlite3_exec(db,
-				"CREATE TABLE 'main'.'files' ("
-			    "path 			TEXT PRIMARY KEY NOT NULL,"
-				"size 			INT NOT NULL,"
-				"mtime 			INT NOT NULL,"
-				"atime 			INT NOT NULL,"
-				"mode 			INT NOT NULL,"
-				"own 			TEXT NOT NULL,"
-				"grp 			TEXT NOT NULL,"
-			    "read_hits 		REAL NOT NULL DEFAULT ('0'),"
-				"write_hits 	INT NOT NULL DEFAULT ('0'),"
-				"srv_read_hits 	INT NOT NULL DEFAULT ('0'),"
-				"srv_write_hits INT NOT NULL DEFAULT ('0'),"
-				"cached 		INT NOT NULL DEFAULT ('0'),"
-				"modified		INT NOT NULL DEFAULT ('0'),"
-				"version 		INT NOT NULL)",
+				"CREATE TABLE 'main'.'files' (				"
+			    "path 			TEXT PRIMARY KEY,			"
+				"size 			INT NOT NULL,				"
+				"mtime 			INT NOT NULL,				"
+				"atime 			INT NOT NULL,				"
+				"mode 			INT NOT NULL,				"
+				"own 			TEXT NOT NULL,				"
+				"grp 			TEXT NOT NULL,				"
+			    "read_hits 		REAL DEFAULT ('0.0'),		"
+				"write_hits 	INT DEFAULT ('0'),			"
+				"srv_read_hits 	INT DEFAULT ('0'),			"
+				"srv_write_hits INT DEFAULT ('0'),			"
+				"cached 		INT DEFAULT ('0'),			"
+				"modified		INT DEFAULT ('0'),			"
+				"version 		INT NOT NULL)				",
 			    NULL,
 			    NULL,
 			    NULL
@@ -239,7 +242,7 @@ int cache_init()
 
 		res = sqlite3_exec(db,
 				"CREATE TABLE 'main'.'log' (					"
-				"path 			TEXT PRIMARY KEY NOT NULL,		"
+				"path 			TEXT PRIMARY KEY,				"
 				"new_path 		TEXT UNIQUE,					"
 				"action 		INT NOT NULL)					",
 				NULL,
@@ -841,7 +844,7 @@ void cache_sync_modified()
 
 int cache_sync()
 {
-	fprintf(stderr, VT_ERROR "CACHE SYNC\n");
+	fprintf(stderr, VT_ACTION "CACHE SYNC\n" VT_NORMAL);
 
 
 	pthread_mutex_lock( &sync_mutex );
